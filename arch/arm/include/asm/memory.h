@@ -123,6 +123,8 @@
 /*
  * Convert a physical address to a Page Frame Number and back
  */
+
+// 把一个物理地址转换成 page的number，也就是右移12位
 #define	__phys_to_pfn(paddr)	((unsigned long)((paddr) >> PAGE_SHIFT))
 #define	__pfn_to_phys(pfn)	((phys_addr_t)(pfn) << PAGE_SHIFT)
 

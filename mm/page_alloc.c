@@ -4473,7 +4473,7 @@ int __meminit early_pfn_to_nid(unsigned long pfn)
 	return 0;
 }
 
-#ifdef CONFIG_NODES_SPAN_OTHER_NODES
+#ifdef CONFIG_NODES_SPAN_OTHER_NODES    // 这个没有定义
 bool __meminit early_pfn_in_nid(unsigned long pfn, int node)
 {
 	int nid;
@@ -4996,7 +4996,7 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 		unsigned long node_start_pfn, unsigned long *zholes_size)
 {
-	pg_data_t *pgdat = NODE_DATA(nid);
+	pg_data_t *pgdat = NODE_DATA(nid);  //0xc1017c00
 	unsigned long start_pfn = 0;
 	unsigned long end_pfn = 0;
 

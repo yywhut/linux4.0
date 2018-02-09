@@ -722,9 +722,13 @@ static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
 	if (addr & SECTION_SIZE)
 		pmd++;
 #endif
+
+//*pmd 是 Hex:0xc0007000
 	do {
-		*pmd = __pmd(phys | type->prot_sect);
-		phys += SECTION_SIZE;
+		*pmd = __pmd(phys | type->prot_sect); //页表的这个条目pmd，写入的值是什么，可见，把物理地址和type的映射方式(prot_sect)写进去了;
+		phys += SECTION_SIZE; // 加了1M之后Hex:0x60100000
+		//往下走之前pmd=0xc0007000       addr = 0xc0000000 end = 0xc0200000 
+		// while 之后    pmd= 0xc0007004  addr = 0xc0100000 
 	} while (pmd++, addr += SECTION_SIZE, addr != end);
 
 	flush_pmd_entry(p);
@@ -734,7 +738,11 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 				      unsigned long end, phys_addr_t phys,
 				      const struct mem_type *type)
 {
-	pmd_t *pmd = pmd_offset(pud, addr);
+
+	//这个pmd_t结构就只是一个ulong大小了，这里函数pmd_offset的实现就是pmd = (pmd_t *)pgd，
+		//地址不变，但类型转变，意思很明显；
+
+	pmd_t *pmd = pmd_offset(pud, addr); //Hex:0xc0007000
 	unsigned long next;
 
 	do {
@@ -742,12 +750,20 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 		 * With LPAE, we must loop over to map
 		 * all the pmds for the given range.
 		 */
-		next = pmd_addr_end(addr, end);
+		next = pmd_addr_end(addr, end); // Hex:0xc0200000
 
 		/*
 		 * Try a section mapping - addr, next and phys must all be
 		 * aligned to a section boundary.
 		 */
+
+	
+ 
+	/*
+	整个low mem都使用section映射
+	如果打开了rodata配置，那么bss所在的最后一个1M会使用page映射
+	其余都是page映射
+	*/
 		if (type->prot_sect &&
 				((addr | next | phys) & ~SECTION_MASK) == 0) {
 			__map_init_section(pmd, addr, next, phys, type);
@@ -756,24 +772,39 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 						__phys_to_pfn(phys), type);
 		}
 
+		//第一次 phys:0x60000000    next：0xc0200000 add：0xc0000000  
 		phys += next - addr;
 
+		//运行while之前 pmd:0xc0007000  
+
 	} while (pmd++, addr = next, addr != end);
+		//运行之后pmd:0xc0007004     addr =  0xc0200000  end 0xc0200000
 }
+
+
+// 0xc0007000 0xc0000000,0xc0200000,0x60000000,type
+//pgd 页表所在的位置
+// addr 需要映射到的虚拟地址
+// next 下一个段的地址
+// phys 想要映射的物理地址，这里表示 想把0x60000000 开始物理地址映射到 0xc0000000的位置上，
+// 映射的大小为end截止
 
 static void __init alloc_init_pud(pgd_t *pgd, unsigned long addr,
 				  unsigned long end, phys_addr_t phys,
 				  const struct mem_type *type)
 {
-	pud_t *pud = pud_offset(pgd, addr);
+	pud_t *pud = pud_offset(pgd, addr);   //return (pud_t *)pgd;  pud 就是pgd 已经调试
 	unsigned long next;
 
+	// 第一次进来的时候先把物理地址 0x60000000 到 0x60100000 这个段
+	// 跟 到0x60200000  这两个段，也就是2M的低端内存先进行映射
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(addr, end);  // Hex:0xc0200000
 		alloc_init_pmd(pud, addr, next, phys, type);
-		phys += next - addr;
-	} while (pud++, addr = next, addr != end);
-}
+	//phys Hex:0x60000000  next 0xc0200000  addr 0xc0000000
+		phys += next - addr;   //  这里是加了2M
+	} while (pud++, addr = next, addr != end);   //end:0xc0200000
+}// 最后出来的时候 phys：0x61000000  pud：Hex:0xc0007040 addr：0xc1000000  也就是映射了16M
 
 #ifndef CONFIG_ARM_LPAE
 static void __init create_36bit_mapping(struct map_desc *md,
@@ -848,12 +879,15 @@ static void __init create_mapping(struct map_desc *md)
 	const struct mem_type *type;
 	pgd_t *pgd;
 
+	//?*虚拟地址不是中断表地址并且在用户区（0~3G），出错*/
+
 	if (md->virtual != vectors_base() && md->virtual < TASK_SIZE) {
 		pr_warn("BUG: not creating mapping for 0x%08llx at 0x%08lx in user region\n",
 			(long long)__pfn_to_phys((u64)md->pfn), md->virtual);
 		return;
 	}
 
+	// /*内存类型为IO型或ROM并且虚拟地址为低端内存申请区(3G~3G + 768MB)，出错*/
 	if ((md->type == MT_DEVICE || md->type == MT_ROM) &&
 	    md->virtual >= PAGE_OFFSET &&
 	    (md->virtual < VMALLOC_START || md->virtual >= VMALLOC_END)) {
@@ -873,9 +907,9 @@ static void __init create_mapping(struct map_desc *md)
 	}
 #endif
 
-	addr = md->virtual & PAGE_MASK;
-	phys = __pfn_to_phys(md->pfn);
-	length = PAGE_ALIGN(md->length + (md->virtual & ~PAGE_MASK));
+	addr = md->virtual & PAGE_MASK; // Hex:0xc0000000
+	phys = __pfn_to_phys(md->pfn); //Hex:0x60000000
+	length = PAGE_ALIGN(md->length + (md->virtual & ~PAGE_MASK)); //Hex:0x1000000
 
 	if (type->prot_l1 == 0 && ((addr | phys | length) & ~SECTION_MASK)) {
 		pr_warn("BUG: map for 0x%08llx at 0x%08lx can not be mapped using pages, ignoring.\n",
@@ -883,11 +917,31 @@ static void __init create_mapping(struct map_desc *md)
 		return;
 	}
 
-	pgd = pgd_offset_k(addr);
-	end = addr + length;
-	do {
-		unsigned long next = pgd_addr_end(addr, end);
 
+	/*
+	 获得该虚拟地址addr属于第一级页表（L1）的哪个表项，详细跟踪pgd_offset_k
+	 函数（定义在：arch/arm/include/asm/pgtable.h），你会发现，我们内核的L1页目录表的基地址
+	 位于0xc0004000，而我们的内核代码则是放置在0xc0008000开始的位置。而从0xc0004000到0xc0008000区间
+	 大小是16KB，刚好就是L1页表的大小（见文章开头的描述）
+	*/
+
+	pgd = pgd_offset_k(addr);//pgd =  Hex:0xc0007000
+	end = addr + length;  //Hex:0xc1000000
+	do {
+		unsigned long next = pgd_addr_end(addr, end);   //获得下一段开始地址 ,这里一段是2M的空间
+														//Hex:0xc0200000
+
+
+		//申请并初始化一个段
+
+         // 一级页表(段页表)虚拟地址、虚拟起始地址、虚拟结尾地址(要么是addr + 2MB，要么是end)、物理起始地址、内存
+
+		// 0xc0007000 0xc0000000,0xc0200000,0x60000000,type
+		//pgd 页表所在的位置
+		// addr 需要映射到的虚拟地址
+		// next 下一个段的地址
+		// phys 想要映射的物理地址，这里表示 想把0x60000000 开始物理地址映射到 0xc0000000的位置上，
+		// 映射的大小为end截止
 		alloc_init_pud(pgd, addr, next, phys, type);
 
 		phys += next - addr;
@@ -1153,6 +1207,9 @@ static inline void prepare_page_table(void)
 {
 	unsigned long addr;
 	phys_addr_t end;
+	//PMD_SIZE  0x200000
+	// MODULES_VADDR   0xbf000000
+	// PAGE_OFFSET  0xc0000000  jj
 
 	/*
 	 * Clear out all the mappings below the kernel image.
@@ -1329,18 +1386,19 @@ static void __init kmap_init(void)
 static void __init map_lowmem(void)
 {
 	struct memblock_region *reg;
-	phys_addr_t kernel_x_start = round_down(__pa(_stext), SECTION_SIZE);
-	phys_addr_t kernel_x_end = round_up(__pa(__init_end), SECTION_SIZE);
+	phys_addr_t kernel_x_start = round_down(__pa(_stext), SECTION_SIZE); //Hex:0x60000000
+	phys_addr_t kernel_x_end = round_up(__pa(__init_end), SECTION_SIZE);//Hex:0x61000000
 
 	/* Map all the lowmem memory banks. */
 	for_each_memblock(memory, reg) {
-		phys_addr_t start = reg->base;
-		phys_addr_t end = start + reg->size;
+		phys_addr_t start = reg->base;  //0x60000000
+		phys_addr_t end = start + reg->size;  //size：0x40000000   end：0xa0000000   
+		//根据实际内存大小，需要把这些物理内存都映射掉
 		struct map_desc map;
 
 		if (end > arm_lowmem_limit)
 			end = arm_lowmem_limit;
-		if (start >= end)
+		if (start >= end)   //0x8f800000
 			break;
 
 		if (end < kernel_x_start) {
@@ -1368,13 +1426,16 @@ static void __init map_lowmem(void)
 				create_mapping(&map);
 			}
 
-			map.pfn = __phys_to_pfn(kernel_x_start);
-			map.virtual = __phys_to_virt(kernel_x_start);
-			map.length = kernel_x_end - kernel_x_start;
-			map.type = MT_MEMORY_RWX;
+
+			// 这里只把kernel的16M给映射了，跟之前好像不太一样啊
+			map.pfn = __phys_to_pfn(kernel_x_start);  //Hex:0x60000
+			map.virtual = __phys_to_virt(kernel_x_start); //0xc0000000
+			map.length = kernel_x_end - kernel_x_start; //0x1000000   16m
+			map.type = MT_MEMORY_RWX; 
 
 			create_mapping(&map);
 
+			// 这里继续把后面的都映射来的，一共到0x8f800000 结束
 			if (kernel_x_end < end) {
 				map.pfn = __phys_to_pfn(kernel_x_end);
 				map.virtual = __phys_to_virt(kernel_x_end);
