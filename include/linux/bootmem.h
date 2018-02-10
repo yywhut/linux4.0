@@ -212,6 +212,8 @@ static inline void * __init memblock_virt_alloc_node(
 					    BOOTMEM_ALLOC_ACCESSIBLE, nid);
 }
 
+
+//运行的是这里
 static inline void * __init memblock_virt_alloc_node_nopanic(
 						phys_addr_t size, int nid)
 {

@@ -125,12 +125,9 @@ void __next_mem_range_rev(u64 *idx, int nid, struct memblock_type *type_a,
  */
 #define for_each_mem_range_rev(i, type_a, type_b, nid,			\
 			       p_start, p_end, p_nid)			\
-	for (i = (u64)ULLONG_MAX,					\
-		     __next_mem_range_rev(&i, nid, type_a, type_b,	\
-					 p_start, p_end, p_nid);	\
+	for (i = (u64)ULLONG_MAX,__next_mem_range_rev(&i, nid, type_a, type_b,p_start, p_end, p_nid);	\
 	     i != (u64)ULLONG_MAX;					\
-	     __next_mem_range_rev(&i, nid, type_a, type_b,		\
-				  p_start, p_end, p_nid))
+	     __next_mem_range_rev(&i, nid, type_a, type_b,p_start, p_end, p_nid))
 
 #ifdef CONFIG_MOVABLE_NODE
 static inline bool memblock_is_hotpluggable(struct memblock_region *m)

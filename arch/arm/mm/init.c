@@ -201,7 +201,9 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max_low,
 	 * to do anything fancy with the allocation of this memory
 	 * to the zones, now is the time to do it.
 	 */
-	zone_size[0] = max_low - min;  //0x2f800
+	zone_size[0] = max_low - min;  //0x2f800  表明有这么多个物理页面
+	// 这里表示从 0xc0000000 到 0xef800000 一共有0x2f800多个页面
+	// 就是 0xef800000 - 0xc0000000 / 4096
 #ifdef CONFIG_HIGHMEM
 	zone_size[ZONE_HIGHMEM] = max_high - max_low;
 #endif

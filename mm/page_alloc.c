@@ -4729,20 +4729,24 @@ static void __meminit calculate_node_totalpages(struct pglist_data *pgdat,
 	unsigned long realtotalpages, totalpages = 0;
 	enum zone_type i;
 
+	//*zones = 0x2f800
+	// 第一个for循环增加了 0x2f800
+	// 第二个for循环之后变成了 0x40000
 	for (i = 0; i < MAX_NR_ZONES; i++)
 		totalpages += zone_spanned_pages_in_node(pgdat->node_id, i,
 							 node_start_pfn,
 							 node_end_pfn,
 							 zones_size);
-	pgdat->node_spanned_pages = totalpages;
+	pgdat->node_spanned_pages = totalpages;// 0x40000，计算出两个区域一共这么多个page
 
 	realtotalpages = totalpages;
+	//这里没有做什么，都是零
 	for (i = 0; i < MAX_NR_ZONES; i++)
 		realtotalpages -=
 			zone_absent_pages_in_node(pgdat->node_id, i,
 						  node_start_pfn, node_end_pfn,
 						  zholes_size);
-	pgdat->node_present_pages = realtotalpages;
+	pgdat->node_present_pages = realtotalpages;  // 最终只是这里算出一共的page数目
 	printk(KERN_DEBUG "On node %d totalpages: %lu\n", pgdat->node_id,
 							realtotalpages);
 }
@@ -4968,11 +4972,12 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 		 * aligned but the node_mem_map endpoints must be in order
 		 * for the buddy allocator to function correctly.
 		 */
-		start = pgdat->node_start_pfn & ~(MAX_ORDER_NR_PAGES - 1);
-		end = pgdat_end_pfn(pgdat);
+		start = pgdat->node_start_pfn & ~(MAX_ORDER_NR_PAGES - 1);//0x60000
+		end = pgdat_end_pfn(pgdat); //0xa0000
 		end = ALIGN(end, MAX_ORDER_NR_PAGES);
-		size =  (end - start) * sizeof(struct page);
-		map = alloc_remap(pgdat->node_id, size);
+		size =  (end - start) * sizeof(struct page); //0x800000
+		// 需要8M的数据来保存 page的信息，
+		map = alloc_remap(pgdat->node_id, size); // 这里返回空
 		if (!map)
 			map = memblock_virt_alloc_node_nopanic(size,
 							       pgdat->node_id);
@@ -4996,7 +5001,7 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 		unsigned long node_start_pfn, unsigned long *zholes_size)
 {
-	pg_data_t *pgdat = NODE_DATA(nid);  //0xc1017c00
+	pg_data_t *pgdat = NODE_DATA(nid);  //0xc1017c00  指向一个全局变量
 	unsigned long start_pfn = 0;
 	unsigned long end_pfn = 0;
 

@@ -152,13 +152,23 @@ __memblock_find_range_top_down(phys_addr_t start, phys_addr_t end,
 	phys_addr_t this_start, this_end, cand;
 	u64 i;
 
+/*
+	函数通过使用for_each_free_mem_range_reverse宏封装调用
+	__next_free_mem_range_rev()函数，此函数逐一将memblock.memory
+	里面的内存块信息提取出来与memblock.reserved的各项信息进行检验，
+	确保返回的this_start和this_end不会是分配过的内存块。
+*/
 	for_each_free_mem_range_reverse(i, nid, &this_start, &this_end, NULL) {
-		this_start = clamp(this_start, start, end);
-		this_end = clamp(this_end, start, end);
 
+	//this_start：0x6800bbe0   stat：0x1000   end：0x8f800000
+		this_start = clamp(this_start, start, end);
+	//this_start：0x6800bbe0  this_end：0xa0000000  start：0x1000  end：0x8f800000
+		this_end = clamp(this_end, start, end);
+// this_end :0x8f800000  size:0x2000
 		if (this_end < size)
 			continue;
 
+//cand:0x8f7fe000
 		cand = round_down(this_end - size, align);
 		if (cand >= this_start)
 			return cand;
@@ -196,17 +206,18 @@ phys_addr_t __init_memblock memblock_find_in_range_node(phys_addr_t size,
 
 	/* pump up @end */
 	if (end == MEMBLOCK_ALLOC_ACCESSIBLE)
-		end = memblock.current_limit;
+		end = memblock.current_limit; // 0x8f800000
 
 	/* avoid allocating the first page */
-	start = max_t(phys_addr_t, start, PAGE_SIZE);
+	start = max_t(phys_addr_t, start, PAGE_SIZE); //0x1000 也就是4096
 	end = max(start, end);
-	kernel_end = __pa_symbol(_end);
+	kernel_end = __pa_symbol(_end); //0x6104c158 应该是kernel的结束地址
 
 	/*
 	 * try bottom-up allocation only when bottom-up mode
 	 * is set and @end is above the kernel image.
 	 */
+	 //memblock_bottom_up 返回false
 	if (memblock_bottom_up() && end > kernel_end) {
 		phys_addr_t bottom_up_start;
 
@@ -233,6 +244,7 @@ phys_addr_t __init_memblock memblock_find_in_range_node(phys_addr_t size,
 			     "memory hotunplug may be affected\n");
 	}
 
+//0x1000  0x8f800000 0x2000 0x2000  -1(0xffffffff)
 	return __memblock_find_range_top_down(start, end, size, align, nid);
 }
 
@@ -901,33 +913,35 @@ void __init_memblock __next_mem_range_rev(u64 *idx, int nid,
 					  phys_addr_t *out_start,
 					  phys_addr_t *out_end, int *out_nid)
 {
-	int idx_a = *idx & 0xffffffff;
-	int idx_b = *idx >> 32;
+	int idx_a = *idx & 0xffffffff;   //0xffffffff
+	int idx_b = *idx >> 32;      //0xffffffff
 
 	if (WARN_ONCE(nid == MAX_NUMNODES, "Usage of MAX_NUMNODES is deprecated. Use NUMA_NO_NODE instead\n"))
 		nid = NUMA_NO_NODE;
 
 	if (*idx == (u64)ULLONG_MAX) {
-		idx_a = type_a->cnt - 1;
-		idx_b = type_b->cnt;
+		idx_a = type_a->cnt - 1;    //1-1 = 0
+		idx_b = type_b->cnt;  // idx_b:3    
 	}
 
+	//idx_a = 0
 	for (; idx_a >= 0; idx_a--) {
 		struct memblock_region *m = &type_a->regions[idx_a];
 
-		phys_addr_t m_start = m->base;
-		phys_addr_t m_end = m->base + m->size;
-		int m_nid = memblock_get_region_node(m);
+		phys_addr_t m_start = m->base;  //0x60000000
+		phys_addr_t m_end = m->base + m->size; //0xa0000000 =0x60000000 +  0x40000000
+		int m_nid = memblock_get_region_node(m);  //0
 
 		/* only memory regions are associated with nodes, check it */
-		if (nid != NUMA_NO_NODE && nid != m_nid)
+		if (nid != NUMA_NO_NODE && nid != m_nid)  // 没进
 			continue;
 
+	//movable_node_is_enabled 返回false
 		/* skip hotpluggable memory regions if needed */
 		if (movable_node_is_enabled() && memblock_is_hotpluggable(m))
 			continue;
 
-		if (!type_b) {
+		if (!type_b) {  // 没进
 			if (out_start)
 				*out_start = m_start;
 			if (out_end)
@@ -946,7 +960,9 @@ void __init_memblock __next_mem_range_rev(u64 *idx, int nid,
 			phys_addr_t r_end;
 
 			r = &type_b->regions[idx_b];
-			r_start = idx_b ? r[-1].base + r[-1].size : 0;
+			r_start = idx_b ? r[-1].base + r[-1].size : 0; //0x6800bbe0
+
+			//r_end： 0xffffffff
 			r_end = idx_b < type_b->cnt ?
 				r->base : ULLONG_MAX;
 			/*
@@ -959,16 +975,16 @@ void __init_memblock __next_mem_range_rev(u64 *idx, int nid,
 			/* if the two regions intersect, we're done */
 			if (m_end > r_start) {
 				if (out_start)
-					*out_start = max(m_start, r_start);
+					*out_start = max(m_start, r_start); //*out_start = 0x6800bbe0
 				if (out_end)
-					*out_end = min(m_end, r_end);
+					*out_end = min(m_end, r_end);   //*out_end = 0xa0000000
 				if (out_nid)
 					*out_nid = m_nid;
 				if (m_start >= r_start)
 					idx_a--;
 				else
-					idx_b--;
-				*idx = (u32)idx_a | (u64)idx_b << 32;
+					idx_b--;    //进了这里
+				*idx = (u32)idx_a | (u64)idx_b << 32;  //*idx = 0x200000000
 				return;
 			}
 		}
@@ -1055,8 +1071,11 @@ static phys_addr_t __init memblock_alloc_range_nid(phys_addr_t size,
 		 * The min_count is set to 0 so that memblock allocations are
 		 * never reported as leaks.
 		 */
-		kmemleak_alloc(__va(found), size, 0, 0);
-		return found;
+		 //__va 把找到的物理地址转化成虚拟地址
+		 //((void *)__phys_to_virt((phys_addr_t)(x)))
+		kmemleak_alloc(__va(found), size, 0, 0);//found:0x8f7fe000
+		//kmemleak_alloc好像没有执行
+		return found;  //0x8f7fe000
 	}
 	return 0;
 }
@@ -1164,6 +1183,7 @@ static void * __init memblock_virt_alloc_internal(
 		max_addr = memblock.current_limit;
 
 again:
+//size 0x800000  0x40 ，0 ，0， 0
 	alloc = memblock_find_in_range_node(size, align, min_addr, max_addr,
 					    nid);
 	if (alloc)
@@ -1219,6 +1239,8 @@ error:
  * RETURNS:
  * Virtual address of allocated memory block on success, NULL on failure.
  */
+
+				//运行的是这里
 void * __init memblock_virt_alloc_try_nid_nopanic(
 				phys_addr_t size, phys_addr_t align,
 				phys_addr_t min_addr, phys_addr_t max_addr,
