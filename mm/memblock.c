@@ -126,7 +126,7 @@ __memblock_find_range_bottom_up(phys_addr_t start, phys_addr_t end,
 
 		cand = round_up(this_start, align);
 		if (cand < this_end && this_end - cand >= size)
-			return cand;
+			return cand;   //0x8f7fe000  距离 0x8f80000 刚好差距 0x2000
 	}
 
 	return 0;
@@ -158,6 +158,7 @@ __memblock_find_range_top_down(phys_addr_t start, phys_addr_t end,
 	里面的内存块信息提取出来与memblock.reserved的各项信息进行检验，
 	确保返回的this_start和this_end不会是分配过的内存块。
 */
+//i:0x100000000000000
 	for_each_free_mem_range_reverse(i, nid, &this_start, &this_end, NULL) {
 
 	//this_start：0x6800bbe0   stat：0x1000   end：0x8f800000
@@ -244,7 +245,7 @@ phys_addr_t __init_memblock memblock_find_in_range_node(phys_addr_t size,
 			     "memory hotunplug may be affected\n");
 	}
 
-//0x1000  0x8f800000 0x2000 0x2000  -1(0xffffffff)
+//0x1000  0x8f800000 0x800000 0x2000  0x40   0
 	return __memblock_find_range_top_down(start, end, size, align, nid);
 }
 
@@ -960,7 +961,8 @@ void __init_memblock __next_mem_range_rev(u64 *idx, int nid,
 			phys_addr_t r_end;
 
 			r = &type_b->regions[idx_b];
-			r_start = idx_b ? r[-1].base + r[-1].size : 0; //0x6800bbe0
+			//0x8f7fa000 + 0x6000
+			r_start = idx_b ? r[-1].base + r[-1].size : 0; //0x8f800000
 
 			//r_end： 0xffffffff
 			r_end = idx_b < type_b->cnt ?
@@ -975,7 +977,7 @@ void __init_memblock __next_mem_range_rev(u64 *idx, int nid,
 			/* if the two regions intersect, we're done */
 			if (m_end > r_start) {
 				if (out_start)
-					*out_start = max(m_start, r_start); //*out_start = 0x6800bbe0
+					*out_start = max(m_start, r_start); //*out_start = 0x8f800000
 				if (out_end)
 					*out_end = min(m_end, r_end);   //*out_end = 0xa0000000
 				if (out_nid)
@@ -984,7 +986,7 @@ void __init_memblock __next_mem_range_rev(u64 *idx, int nid,
 					idx_a--;
 				else
 					idx_b--;    //进了这里
-				*idx = (u32)idx_a | (u64)idx_b << 32;  //*idx = 0x200000000
+				*idx = (u32)idx_a | (u64)idx_b << 32;  //*idx = 0x300000000
 				return;
 			}
 		}
@@ -1246,6 +1248,9 @@ void * __init memblock_virt_alloc_try_nid_nopanic(
 				phys_addr_t min_addr, phys_addr_t max_addr,
 				int nid)
 {
+
+	//8388608 bytes align=0x0 nid=0 from=0x0 max_addr=0x0 alloc_node_mem_map+0xfc/0x164
+
 	memblock_dbg("%s: %llu bytes align=0x%llx nid=%d from=0x%llx max_addr=0x%llx %pF\n",
 		     __func__, (u64)size, (u64)align, nid, (u64)min_addr,
 		     (u64)max_addr, (void *)_RET_IP_);

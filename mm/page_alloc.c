@@ -4731,7 +4731,7 @@ static void __meminit calculate_node_totalpages(struct pglist_data *pgdat,
 
 	//*zones = 0x2f800
 	// 第一个for循环增加了 0x2f800
-	// 第二个for循环之后变成了 0x40000
+	// 第二个for循环之后变成了 0x40000              刚好是1G
 	for (i = 0; i < MAX_NR_ZONES; i++)
 		totalpages += zone_spanned_pages_in_node(pgdat->node_id, i,
 							 node_start_pfn,
@@ -4747,6 +4747,7 @@ static void __meminit calculate_node_totalpages(struct pglist_data *pgdat,
 						  node_start_pfn, node_end_pfn,
 						  zholes_size);
 	pgdat->node_present_pages = realtotalpages;  // 最终只是这里算出一共的page数目
+	// 因为没有空洞，所以两个是相等的
 	printk(KERN_DEBUG "On node %d totalpages: %lu\n", pgdat->node_id,
 							realtotalpages);
 }
@@ -4963,7 +4964,7 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 
 #ifdef CONFIG_FLAT_NODE_MEM_MAP
 	/* ia64 gets its own node_mem_map, before this, without bootmem */
-	if (!pgdat->node_mem_map) {
+	if (!pgdat->node_mem_map) {//指向page实例数组的指针，用于描述结点的所有物理内存页，它包含了结点中所有内存域的页
 		unsigned long size, start, end;
 		struct page *map;
 
@@ -5001,6 +5002,7 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 		unsigned long node_start_pfn, unsigned long *zholes_size)
 {
+	// 这个是最顶层的结构体
 	pg_data_t *pgdat = NODE_DATA(nid);  //0xc1017c00  指向一个全局变量
 	unsigned long start_pfn = 0;
 	unsigned long end_pfn = 0;
@@ -5009,7 +5011,7 @@ void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 	WARN_ON(pgdat->nr_zones || pgdat->classzone_idx);
 
 	pgdat->node_id = nid;
-	pgdat->node_start_pfn = node_start_pfn;
+	pgdat->node_start_pfn = node_start_pfn;  //0x60000
 #ifdef CONFIG_HAVE_MEMBLOCK_NODE_MAP
 	get_pfn_range_for_nid(nid, &start_pfn, &end_pfn);
 	pr_info("Initmem setup node %d [mem %#018Lx-%#018Lx]\n", nid,

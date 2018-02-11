@@ -181,7 +181,8 @@ void __init setup_dma_zone(const struct machine_desc *mdesc)
 	arm_dma_pfn_limit = arm_dma_limit >> PAGE_SHIFT;
 #endif
 }
-
+//zone_sizes_init中计算出每个zone大小以及zone之间的hole，然后调用free_area_init_node
+//创建内存节点的zone。
 static void __init zone_sizes_init(unsigned long min, unsigned long max_low,
 	unsigned long max_high)
 {
@@ -205,7 +206,7 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max_low,
 	// 这里表示从 0xc0000000 到 0xef800000 一共有0x2f800多个页面
 	// 就是 0xef800000 - 0xc0000000 / 4096
 #ifdef CONFIG_HIGHMEM
-	zone_size[ZONE_HIGHMEM] = max_high - max_low;
+	zone_size[ZONE_HIGHMEM] = max_high - max_low;  //0x10800
 #endif
 
 	/*
@@ -240,6 +241,7 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max_low,
 			arm_dma_zone_size >> PAGE_SHIFT);
 #endif
 
+		//min：0x60000
 	free_area_init_node(0, zone_size, min, zhole_size);
 }
 
@@ -345,12 +347,12 @@ void __init bootmem_init(void)
 	 * Sparsemem tries to allocate bootmem in memory_present(),
 	 * so must be done after the fixed reservations
 	 */
-	arm_memory_present();
+	arm_memory_present();  //貌似空
 
 	/*
 	 * sparse_init() needs the bootmem allocator up and running.
 	 */
-	sparse_init();
+	sparse_init();//貌似空
 
 	/*
 	 * Now free the memory - free_area_init_node needs

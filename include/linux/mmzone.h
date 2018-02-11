@@ -338,7 +338,7 @@ struct zone {
 	 * on the higher zones). This array is recalculated at runtime if the
 	 * sysctl_lowmem_reserve_ratio sysctl changes.
 	 */
-	long lowmem_reserve[MAX_NR_ZONES];
+	long lowmem_reserve[MAX_NR_ZONES];//分别为各种内存域指定了若干页，用于一些无论如何都不能失败的关键性内存分配。  
 
 #ifdef CONFIG_NUMA
 	int node;
@@ -714,17 +714,21 @@ extern struct page *mem_map;
  * Memory statistics and page replacement data structures are maintained on a
  * per-zone basis.
  */
+ //node_states
 struct bootmem_data;
 typedef struct pglist_data {
-	struct zone node_zones[MAX_NR_ZONES];
-	struct zonelist node_zonelists[MAX_ZONELISTS];
-	int nr_zones;
+	struct zone node_zones[MAX_NR_ZONES];////是一个数组，包含了结点中各内存域的数据结构 
+	struct zonelist node_zonelists[MAX_ZONELISTS];//指点了备用结点及其内存域的列表，以便在当前结点没有可用空间时，在备用结点分配内存  
+	int nr_zones; //保存结点中不同内存域的数目  
 #ifdef CONFIG_FLAT_NODE_MEM_MAP	/* means !SPARSEMEM */
-	struct page *node_mem_map;
+	struct page *node_mem_map;  //指向page实例数组的指针，用于描述结点的所有物理内存页，它包含了结点中所有内存域的页。  
 #ifdef CONFIG_PAGE_EXTENSION
 	struct page_ext *node_page_ext;
 #endif
 #endif
+
+//在系统启动期间，内存管理子系统初始化之前，内核页需要使用内存（另外，还需要保留部分内存用于初始化内存管理子系统）。为解决这个问题，内核使用了前面文章讲解的自举内存分配器
+
 #ifndef CONFIG_NO_BOOTMEM
 	struct bootmem_data *bdata;
 #endif
@@ -741,16 +745,16 @@ typedef struct pglist_data {
 	 */
 	spinlock_t node_size_lock;
 #endif
-	unsigned long node_start_pfn;
-	unsigned long node_present_pages; /* total number of physical pages */
-	unsigned long node_spanned_pages; /* total size of physical page
+	unsigned long node_start_pfn;//该NUMA结点第一个页帧的逻辑编号。系统中所有的页帧是依次编号的，每个页帧的号码都是全局唯一的（不只是结点内唯一）。 
+	unsigned long node_present_pages; /* total number of physical pages */ //结点中页帧的数目  
+	unsigned long node_spanned_pages; /* total size of physical page//该结点以页帧为单位计算的长度，包含内存空洞。  
 					     range, including holes */
 	int node_id;
-	wait_queue_head_t kswapd_wait;
+	wait_queue_head_t kswapd_wait;//交换守护进程的等待队列，在将页帧换出结点时会用到
 	wait_queue_head_t pfmemalloc_wait;
-	struct task_struct *kswapd;	/* Protected by
+	struct task_struct *kswapd;	/* Protected by//指向负责该结点的交换守护进程的task_struct。
 					   mem_hotplug_begin/end() */
-	int kswapd_max_order;
+	int kswapd_max_order;//定义需要释放的区域的长度。  
 	enum zone_type classzone_idx;
 #ifdef CONFIG_NUMA_BALANCING
 	/* Lock serializing the migrate rate limiting window */

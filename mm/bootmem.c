@@ -23,6 +23,8 @@
 
 #include "internal.h"
 
+
+/// 这个文件没有编译
 #ifndef CONFIG_NEED_MULTIPLE_NODES
 struct pglist_data __refdata contig_page_data = {
 	.bdata = &bootmem_node_data[0]
@@ -137,7 +139,7 @@ unsigned long __init init_bootmem_node(pg_data_t *pgdat, unsigned long freepfn,
  * @pages: number of available physical pages
  *
  * Returns the number of bytes needed to hold the bitmap.
- */
+ */bootmem_init
 unsigned long __init init_bootmem(unsigned long start, unsigned long pages)
 {
 	max_low_pfn = pages;
