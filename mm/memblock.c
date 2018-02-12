@@ -25,6 +25,19 @@
 
 #include "internal.h"
 
+
+
+/*
+简单点做个小结：memblock管理算法将可用可分配的内存在memblock.memory进行管理起来，
+已分配的内存在memblock.reserved进行管理，只要内存块加入到memblock.reserved里面就表示该
+内存已经被申请占用了。所以有个关键点需要注意，内存申请的时候，仅是把被申请到的内存加
+入到memblock.reserved中，并不会在memblock.memory里面有相关的删除或改动的操作，这也就
+是为什么申请和释放的操作都集中在memblock.reserved的原因了。这个算法效率并不高，但是这
+是合理的，毕竟在初始化阶段没有那么多复杂的内存操作场景，甚至很多地方都是申请了内存做
+永久使用的。
+
+*/
+
 static struct memblock_region memblock_memory_init_regions[INIT_MEMBLOCK_REGIONS] __initdata_memblock;
 static struct memblock_region memblock_reserved_init_regions[INIT_MEMBLOCK_REGIONS] __initdata_memblock;
 #ifdef CONFIG_HAVE_MEMBLOCK_PHYS_MAP
@@ -218,7 +231,7 @@ phys_addr_t __init_memblock memblock_find_in_range_node(phys_addr_t size,
 	 * try bottom-up allocation only when bottom-up mode
 	 * is set and @end is above the kernel image.
 	 */
-	 //memblock_bottom_up 返回false
+	 //memblock_bottom_up 返回false    前面初始化的时候也知道这个值是false（这不是一定的，在numa初始化时会设置为true）
 	if (memblock_bottom_up() && end > kernel_end) {
 		phys_addr_t bottom_up_start;
 
@@ -729,7 +742,8 @@ static int __init_memblock memblock_reserve_region(phys_addr_t base,
 }
 
 int __init_memblock memblock_reserve(phys_addr_t base, phys_addr_t size)
-{
+{
+	//MAX_NUMNODES 是1
 	return memblock_reserve_region(base, size, MAX_NUMNODES, 0);
 }
 
@@ -1188,6 +1202,7 @@ again:
 //size 0x800000  0x40 ，0 ，0， 0
 	alloc = memblock_find_in_range_node(size, align, min_addr, max_addr,
 					    nid);
+//alloc 0x8effa000
 	if (alloc)
 		goto done;
 
@@ -1206,9 +1221,9 @@ again:
 	}
 
 done:
-	memblock_reserve(alloc, size);
+	memblock_reserve(alloc, size); //通过memblock_add_region()函数往memblock.reserved里面添加内存块信息。
 	ptr = phys_to_virt(alloc);
-	memset(ptr, 0, size);
+	memset(ptr, 0, size);  // 把这段内存清0
 
 	/*
 	 * The min_count is set to 0 so that bootmem allocated blocks

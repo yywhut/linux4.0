@@ -183,6 +183,10 @@ void __init setup_dma_zone(const struct machine_desc *mdesc)
 }
 //zone_sizes_init中计算出每个zone大小以及zone之间的hole，然后调用free_area_init_node
 //创建内存节点的zone。
+
+//
+//0x60000  0x8f800	0xa0000
+   //zone_sizes_init(min, max_low, max_high);
 static void __init zone_sizes_init(unsigned long min, unsigned long max_low,
 	unsigned long max_high)
 {
@@ -202,7 +206,7 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max_low,
 	 * to do anything fancy with the allocation of this memory
 	 * to the zones, now is the time to do it.
 	 */
-	zone_size[0] = max_low - min;  //0x2f800  表明有这么多个物理页面
+	zone_size[0] = max_low - min;  //0x2f800  normal区块表明有这么多个物理页面
 	// 这里表示从 0xc0000000 到 0xef800000 一共有0x2f800多个页面
 	// 就是 0xef800000 - 0xc0000000 / 4096
 #ifdef CONFIG_HIGHMEM
@@ -359,6 +363,7 @@ void __init bootmem_init(void)
 	 * the sparse mem_map arrays initialized by sparse_init()
 	 * for memmap_init_zone(), otherwise all PFNs are invalid.
 	 */
+	 //0x60000  0x8f800  0xa0000
 	zone_sizes_init(min, max_low, max_high);
 
 	/*

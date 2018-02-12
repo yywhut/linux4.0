@@ -4861,21 +4861,21 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 {
 	enum zone_type j;
 	int nid = pgdat->node_id;
-	unsigned long zone_start_pfn = pgdat->node_start_pfn;
-	int ret;
+	unsigned long zone_start_pfn = pgdat->node_start_pfn;//0x60000
+	int ret; 
 
-	pgdat_resize_init(pgdat);
-#ifdef CONFIG_NUMA_BALANCING
+	pgdat_resize_init(pgdat);  //空
+#ifdef CONFIG_NUMA_BALANCING  //空
 	spin_lock_init(&pgdat->numabalancing_migrate_lock);
 	pgdat->numabalancing_migrate_nr_pages = 0;
 	pgdat->numabalancing_migrate_next_window = jiffies;
 #endif
-	init_waitqueue_head(&pgdat->kswapd_wait);
+	init_waitqueue_head(&pgdat->kswapd_wait);//初始化内存节点的内存置换等待队列
 	init_waitqueue_head(&pgdat->pfmemalloc_wait);
-	pgdat_page_ext_init(pgdat);
+	pgdat_page_ext_init(pgdat);//空
 
-	for (j = 0; j < MAX_NR_ZONES; j++) {
-		struct zone *zone = pgdat->node_zones + j;
+	for (j = 0; j < MAX_NR_ZONES; j++) {//对每个节点的每个页区进行操作
+		struct zone *zone = pgdat->node_zones + j;//让zone作为本次内存节点每个页区的结构指针。
 		unsigned long size, realsize, freesize, memmap_pages;
 
 		size = zone_spanned_pages_in_node(nid, j, node_start_pfn,
@@ -4982,6 +4982,7 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 		if (!map)
 			map = memblock_virt_alloc_node_nopanic(size,
 							       pgdat->node_id);
+		//map 0xeeffa000
 		pgdat->node_mem_map = map + (pgdat->node_start_pfn - start);
 	}
 #ifndef CONFIG_NEED_MULTIPLE_NODES
@@ -5020,7 +5021,11 @@ void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 	calculate_node_totalpages(pgdat, start_pfn, end_pfn,
 				  zones_size, zholes_size);
 
-	alloc_node_mem_map(pgdat);
+	alloc_node_mem_map(pgdat);  //pgdat->node_mem_map 
+	//这个函数是用来分配8M的内存空间，这8M的内存空间是page 结构体的指针，用来记录真个1G的
+	// 物理内存page
+	// 最后pgdat->node_mem_map 分配的地址就是  0xeeffa000
+	
 #ifdef CONFIG_FLAT_NODE_MEM_MAP
 	printk(KERN_DEBUG "free_area_init_node: node %d, pgdat %08lx, node_mem_map %08lx\n",
 		nid, (unsigned long)pgdat,
