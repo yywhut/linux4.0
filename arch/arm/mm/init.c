@@ -550,7 +550,7 @@ void __init mem_init(void)
 	free_highpages();
 
 	mem_init_print_info(NULL);
-
+// 先打印b跟t 然后把计算的值打印出来，符合print的规则
 #define MLK(b, t) b, t, ((t) - (b)) >> 10
 #define MLM(b, t) b, t, ((t) - (b)) >> 20
 #define MLK_ROUNDUP(b, t) b, t, DIV_ROUND_UP(((t) - (b)), SZ_1K)

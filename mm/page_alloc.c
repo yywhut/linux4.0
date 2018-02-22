@@ -237,6 +237,8 @@ int page_group_by_mobility_disabled __read_mostly;
 
 void set_pageblock_migratetype(struct page *page, int migratetype)
 {
+	/*如果没有开启移动性分类，则所有页都要标记为不可移动的*/	
+
 	if (unlikely(page_group_by_mobility_disabled &&
 		     migratetype < MIGRATE_PCPTYPES))
 		migratetype = MIGRATE_UNMOVABLE;
@@ -2050,6 +2052,7 @@ zonelist_scan:
 	 * Scan zonelist, looking for a zone with enough free.
 	 * See also __cpuset_node_allowed() comment in kernel/cpuset.c.
 	 */
+	 //扫描zonelist查找合适分配内存的zone
 	for_each_zone_zonelist_nodemask(zone, z, zonelist, ac->high_zoneidx,
 								ac->nodemask) {
 		unsigned long mark;
@@ -2806,9 +2809,12 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	unsigned int cpuset_mems_cookie;
 	int alloc_flags = ALLOC_WMARK_LOW|ALLOC_CPUSET|ALLOC_FAIR;
 	gfp_t alloc_mask; /* The gfp_t that was actually used for allocation */
+	//用于保存相关参数的数据结构
 	struct alloc_context ac = {
-		.high_zoneidx = gfp_zone(gfp_mask),
+	/*根据gfp_mask确定分配页所处的管理区*/  
+		.high_zoneidx = gfp_zone(gfp_mask),//计算出zone的zoneidx
 		.nodemask = nodemask,
+		/*根据gfp_mask得到迁移类分配页的型*/ 
 		.migratetype = gfpflags_to_migratetype(gfp_mask),
 	};
 
@@ -2838,6 +2844,7 @@ retry_cpuset:
 	/* We set it here, as __alloc_pages_slowpath might have changed it */
 	ac.zonelist = zonelist;
 	/* The preferred zone is used for statistics later */
+	 /*从zonelist中找到zone_idx与high_zoneidx相同的管理区，也就是之前认定的管理区*/  
 	preferred_zoneref = first_zones_zonelist(ac.zonelist, ac.high_zoneidx,
 				ac.nodemask ? : &cpuset_current_mems_allowed,
 				&ac.preferred_zone);
@@ -2855,6 +2862,7 @@ retry_cpuset:
 		 * complete.
 		 */
 		alloc_mask = memalloc_noio_flags(gfp_mask);
+		/*第一次分配失败的话则会用通过一条低速路径来进行第二次分配，包括唤醒页换出守护进程等等*/	
 
 		page = __alloc_pages_slowpath(alloc_mask, order, &ac);
 	}
@@ -3367,7 +3375,7 @@ void show_free_areas(unsigned int filter)
 static void zoneref_set_zone(struct zone *zone, struct zoneref *zoneref)
 {
 	zoneref->zone = zone;
-	zoneref->zone_idx = zone_idx(zone);
+	zoneref->zone_idx = zone_idx(zone);  //第一次进来时1
 }
 
 /*
@@ -3378,20 +3386,29 @@ static void zoneref_set_zone(struct zone *zone, struct zoneref *zoneref)
 static int build_zonelists_node(pg_data_t *pgdat, struct zonelist *zonelist,
 				int nr_zones)
 {
+	//刚进来nr_zones = 0
 	struct zone *zone;
-	enum zone_type zone_type = MAX_NR_ZONES;
+	enum zone_type zone_type = MAX_NR_ZONES; //3
 
 	do {
-		zone_type--;
-		zone = pgdat->node_zones + zone_type;
-		if (populated_zone(zone)) {
-			zoneref_set_zone(zone,
+		zone_type--; //2
+		zone = pgdat->node_zones + zone_type; //指向Movable
+		if (populated_zone(zone)) {{/*如果管理区的可用页面数不为0*/ //Movable为0  
+			//第二次HighMem 进来了
+			zoneref_set_zone(zone,     /*将zone添加进zonelist*/  
 				&zonelist->_zonerefs[nr_zones++]);
-			check_highest_zone(zone_type);
+			//也就是把HighMem 这个zone放到zonelist->_zonerefs[0] 中
+			/*
+			zonelist->_zonerefs[0]->zone = zone; //HighMem
+			zonelist->_zonerefs[0]->zone_idx = zone_idx(zone);  //第一次进来时1
+
+			*/
+			
+			check_highest_zone(zone_type);//空
 		}
 	} while (zone_type);
 
-	return nr_zones;
+	return nr_zones;  //2  只有两个zone
 }
 
 
@@ -3660,6 +3677,7 @@ static int default_zonelist_order(void)
 }
 #endif /* CONFIG_64BIT */
 
+//没跑
 static void set_zonelist_order(void)
 {
 	if (user_zonelist_order == ZONELIST_ORDER_DEFAULT)
@@ -3668,6 +3686,7 @@ static void set_zonelist_order(void)
 		current_zonelist_order = user_zonelist_order;
 }
 
+//没跑
 static void build_zonelists(pg_data_t *pgdat)
 {
 	int j, node, load;
@@ -3720,6 +3739,7 @@ static void build_zonelists(pg_data_t *pgdat)
 }
 
 /* Construct the zonelist performance cache - see further mmzone.h */
+//没跑
 static void build_zonelist_cache(pg_data_t *pgdat)
 {
 	struct zonelist *zonelist;
@@ -3759,13 +3779,14 @@ static void set_zonelist_order(void)
 	current_zonelist_order = ZONELIST_ORDER_ZONE;
 }
 
+//跑的这里
 static void build_zonelists(pg_data_t *pgdat)
 {
 	int node, local_node;
 	enum zone_type j;
 	struct zonelist *zonelist;
 
-	local_node = pgdat->node_id;
+	local_node = pgdat->node_id; //0
 
 	zonelist = &pgdat->node_zonelists[0];
 	j = build_zonelists_node(pgdat, zonelist, 0);
@@ -3778,18 +3799,18 @@ static void build_zonelists(pg_data_t *pgdat)
 	 * zones coming right after the local ones are those from
 	 * node N+1 (modulo N)
 	 */
-	for (node = local_node + 1; node < MAX_NUMNODES; node++) {
+	for (node = local_node + 1; node < MAX_NUMNODES; node++) { //没跑
 		if (!node_online(node))
 			continue;
 		j = build_zonelists_node(NODE_DATA(node), zonelist, j);
 	}
-	for (node = 0; node < local_node; node++) {
+	for (node = 0; node < local_node; node++) {  //没跑
 		if (!node_online(node))
 			continue;
 		j = build_zonelists_node(NODE_DATA(node), zonelist, j);
 	}
 
-	zonelist->_zonerefs[j].zone = NULL;
+	zonelist->_zonerefs[j].zone = NULL; //把2清零了，也就是只有0跟1，其中0放的是high，1放的是normal
 	zonelist->_zonerefs[j].zone_idx = 0;
 }
 
@@ -3837,7 +3858,7 @@ static int __build_all_zonelists(void *data)
 	memset(node_load, 0, sizeof(node_load));
 #endif
 
-	if (self && !node_online(self->node_id)) {
+	if (self && !node_online(self->node_id)) {  //没跑
 		build_zonelists(self);
 		build_zonelist_cache(self);
 	}
@@ -3904,7 +3925,7 @@ void __ref build_all_zonelists(pg_data_t *pgdat, struct zone *zone)
 	set_zonelist_order();
 
 	if (system_state == SYSTEM_BOOTING) {
-		build_all_zonelists_init();
+		build_all_zonelists_init();  //进入
 	} else {
 #ifdef CONFIG_MEMORY_HOTPLUG
 		if (zone)
@@ -4130,7 +4151,7 @@ void __meminit memmap_init_zone(unsigned long size, int nid, unsigned long zone,
 	struct zone *z;
 
 	if (highest_memmap_pfn < end_pfn - 1)
-		highest_memmap_pfn = end_pfn - 1;
+		highest_memmap_pfn = end_pfn - 1;  //0x8f7ff
 
 	z = &NODE_DATA(nid)->node_zones[zone];
 	for (pfn = start_pfn; pfn < end_pfn; pfn++) {
@@ -4145,7 +4166,7 @@ void __meminit memmap_init_zone(unsigned long size, int nid, unsigned long zone,
 			if (!early_pfn_in_nid(pfn, nid))
 				continue;
 		}
-		page = pfn_to_page(pfn);
+		page = pfn_to_page(pfn);//第一次page的地址是 0xeeffa000
 		set_page_links(page, zone, nid, pfn);
 		mminit_verify_page_links(page, zone, nid, pfn);
 		init_page_count(page);
@@ -4166,10 +4187,11 @@ void __meminit memmap_init_zone(unsigned long size, int nid, unsigned long zone,
 		 * check here not to call set_pageblock_migratetype() against
 		 * pfn out of zone.
 		 */
+		   /*如果pfn处在合理的范围，并且该pfn是一个pageblock的起始页框号*/  
 		if ((z->zone_start_pfn <= pfn)
 		    && (pfn < zone_end_pfn(z))
 		    && !(pfn & (pageblock_nr_pages - 1)))
-			set_pageblock_migratetype(page, MIGRATE_MOVABLE);
+			set_pageblock_migratetype(page, MIGRATE_MOVABLE);/*将页框对应的位图域标记为可移动的*/  
 
 		INIT_LIST_HEAD(&page->lru);
 #ifdef WANT_PAGE_VIRTUAL
@@ -4179,6 +4201,20 @@ void __meminit memmap_init_zone(unsigned long size, int nid, unsigned long zone,
 #endif
 	}
 }
+
+
+
+/*
+for (order = 0; order < MAX_ORDER; order++)
+{
+	for (type = 0; type < MIGRATE_TYPES; type++)
+	{
+		INIT_LIST_HEAD(&zone->free_area[order].free_list[t]);
+		zone->free_area[order].nr_free = 0;
+	}
+}
+
+*/
 
 static void __meminit zone_init_free_lists(struct zone *zone)
 {
@@ -4616,6 +4652,7 @@ static void __meminit adjust_zone_range_for_zone_movable(int nid,
  * Return the number of pages a zone spans in a node, including holes
  * present_pages = zone_spanned_pages_in_node() - zone_absent_pages_in_node()
  */
+ //这里没跑
 static unsigned long __meminit zone_spanned_pages_in_node(int nid,
 					unsigned long zone_type,
 					unsigned long node_start_pfn,
@@ -4696,7 +4733,7 @@ static unsigned long __meminit zone_absent_pages_in_node(int nid,
 	return __absent_pages_in_range(nid, zone_start_pfn, zone_end_pfn);
 }
 
-#else /* CONFIG_HAVE_MEMBLOCK_NODE_MAP */
+#else /* CONFIG_HAVE_MEMBLOCK_NODE_MAP */  //跑的这里
 static inline unsigned long __meminit zone_spanned_pages_in_node(int nid,
 					unsigned long zone_type,
 					unsigned long node_start_pfn,
@@ -4878,8 +4915,10 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		struct zone *zone = pgdat->node_zones + j;//让zone作为本次内存节点每个页区的结构指针。
 		unsigned long size, realsize, freesize, memmap_pages;
 
+		//第一次0x2f800
 		size = zone_spanned_pages_in_node(nid, j, node_start_pfn,
 						  node_end_pfn, zones_size);
+		//第一次0x2f800
 		realsize = freesize = size - zone_absent_pages_in_node(nid, j,
 								node_start_pfn,
 								node_end_pfn,
@@ -4890,11 +4929,13 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		 * is used by this zone for memmap. This affects the watermark
 		 * and per-cpu initialisations
 		 */
+
+		//0x5f0
 		memmap_pages = calc_memmap_size(size, realsize);
 		if (!is_highmem_idx(j)) {
 			if (freesize >= memmap_pages) {
-				freesize -= memmap_pages;
-				if (memmap_pages)
+				freesize -= memmap_pages;  //这里进来了
+				if (memmap_pages)  // Normal zone: 1520 pages used for memmap
 					printk(KERN_DEBUG
 					       "  %s zone: %lu pages used for memmap\n",
 					       zone_names[j], memmap_pages);
@@ -4905,9 +4946,9 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		}
 
 		/* Account for reserved pages */
-		if (j == 0 && freesize > dma_reserve) {
+		if (j == 0 && freesize > dma_reserve) {  //Normal zone: 0 pages reserved
 			freesize -= dma_reserve;
-			printk(KERN_DEBUG "  %s zone: %lu pages reserved\n",
+			printk(KERN_DEBUG "  %s zone: %lu pages reserved\n",  
 					zone_names[0], dma_reserve);
 		}
 
@@ -4946,7 +4987,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		if (!size)
 			continue;
 
-		set_pageblock_order();
+		set_pageblock_order();//空
 		setup_usemap(pgdat, zone, zone_start_pfn, size);
 		ret = init_currently_empty_zone(zone, zone_start_pfn,
 						size, MEMMAP_EARLY);
@@ -6165,7 +6206,9 @@ void set_pfnblock_flags_mask(struct page *page, unsigned long flags,
 	BUILD_BUG_ON(NR_PAGEBLOCK_BITS != 4);
 
 	zone = page_zone(page);
+	/*得到位图的起始地址，即zone->pageblock_flags*/  
 	bitmap = get_pageblock_bitmap(zone, pfn);
+	/*得到pfn对应的位图区域的偏移量*/  
 	bitidx = pfn_to_bitidx(zone, pfn);
 	word_bitidx = bitidx / BITS_PER_LONG;
 	bitidx &= (BITS_PER_LONG-1);

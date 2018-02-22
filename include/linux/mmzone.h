@@ -250,6 +250,10 @@ enum zone_watermarks {
 #define high_wmark_pages(z) (z->watermark[WMARK_HIGH])
 
 struct per_cpu_pages {
+	/**
+		 * 高速缓存中的页框个数
+		 */
+
 	int count;		/* number of pages in the list */
 	int high;		/* high watermark, emptying needed */
 	int batch;		/* chunk size for buddy add/remove */
@@ -272,7 +276,7 @@ struct per_cpu_pageset {
 #endif /* !__GENERATING_BOUNDS.H */
 
 enum zone_type {
-#ifdef CONFIG_ZONE_DMA
+#ifdef CONFIG_ZONE_DMA  // 这个没有
 	/*
 	 * ZONE_DMA is used when there are devices that are not able
 	 * to do DMA to all of addressable memory (ZONE_NORMAL). Then we
@@ -293,7 +297,7 @@ enum zone_type {
 	 */
 	ZONE_DMA,
 #endif
-#ifdef CONFIG_ZONE_DMA32
+#ifdef CONFIG_ZONE_DMA32  //没有
 	/*
 	 * x86_64 needs two ZONE_DMAs because it supports devices that are
 	 * only able to do DMA to the lower 16M but also 32 bit devices that
@@ -307,7 +311,7 @@ enum zone_type {
 	 * transfers to all addressable memory.
 	 */
 	ZONE_NORMAL,
-#ifdef CONFIG_HIGHMEM
+#ifdef CONFIG_HIGHMEM  //有
 	/*
 	 * A memory area that is only addressable by the kernel through
 	 * mapping portions into its own address space. This is for example
@@ -319,7 +323,7 @@ enum zone_type {
 	ZONE_HIGHMEM,
 #endif
 	ZONE_MOVABLE,
-	__MAX_NR_ZONES
+	__MAX_NR_ZONES// 这里应该是3，
 };
 
 #ifndef __GENERATING_BOUNDS_H
@@ -328,7 +332,7 @@ struct zone {
 	/* Read-mostly fields */
 
 	/* zone watermarks, access with *_wmark_pages(zone) macros */
-	unsigned long watermark[NR_WMARK];
+	unsigned long watermark[NR_WMARK];/*该管理区的三个水平线值，min,low,high*/  
 
 	/*
 	 * We don't know if the memory that we're going to allocate will be freeable
@@ -364,6 +368,9 @@ struct zone {
 	 * Flags for a pageblock_nr_pages block. See pageblock-flags.h.
 	 * In SPARSEMEM, this map is stored in struct mem_section
 	 */
+	 //它用于跟踪包含pageblock_nr_pages个页的内存区的属性。在初始化期间，
+	 //内核自动保证对每个迁移类型，在pageblock_flags中都分配了足够存储
+	 //NR_PAGEBLOCK_BITS个比特的空间。
 	unsigned long		*pageblock_flags;
 #endif /* CONFIG_SPARSEMEM */
 
@@ -423,7 +430,7 @@ struct zone {
 	unsigned long		spanned_pages;
 	unsigned long		present_pages;
 
-	const char		*name;
+	const char		*name;/*指向管理区的名称，为"DMA","NORMAL"或"HighMem"*/  
 
 	/*
 	 * Number of MIGRATE_RESERVE page block. To maintain for just
@@ -475,6 +482,11 @@ struct zone {
 
 	ZONE_PADDING(_pad1_)
 	/* free areas of different sizes */
+	/**
+	 * 标识出管理区中的空闲页框块。
+	 * 包含11个元素，被伙伴系统使用。分别对应大小的1,2,4,8,16,32,128,256,512,1024连续空闲块的链表。
+	 * 第k个元素标识所有大小为2^k的空闲块。free_list字段指向双向循环链表的头。
+	 */
 	struct free_area	free_area[MAX_ORDER];
 
 	/* zone flags, see below */
@@ -573,7 +585,7 @@ static inline bool zone_is_empty(struct zone *zone)
 #define DEF_PRIORITY 12
 
 /* Maximum number of zones on a zonelist */
-#define MAX_ZONES_PER_ZONELIST (MAX_NUMNODES * MAX_NR_ZONES)
+#define MAX_ZONES_PER_ZONELIST (MAX_NUMNODES * MAX_NR_ZONES)  //1* 3
 
 #ifdef CONFIG_NUMA
 
@@ -684,7 +696,7 @@ struct zoneref {
  */
 struct zonelist {
 	struct zonelist_cache *zlcache_ptr;		     // NULL or &zlcache
-	struct zoneref _zonerefs[MAX_ZONES_PER_ZONELIST + 1];
+	struct zoneref _zonerefs[MAX_ZONES_PER_ZONELIST + 1];  //3 + 1
 #ifdef CONFIG_NUMA
 	struct zonelist_cache zlcache;			     // optional ...
 #endif
@@ -715,9 +727,27 @@ extern struct page *mem_map;
  * per-zone basis.
  */
  //node_states
+
+/*
+Linux可以支持大量的架构，所以需要用一种与架构无关的方式去描述内存。
+在linux的内存管理中，我们首先要明确的一个概念就是
+NUMA(Non-Uniform Memory Access,关于NUMA的介绍可以参考我前面的文章)。
+很多大型机器都采用NUMA架构，将内存和CPU分为很多组，每一组称为一个
+节点(node)。节点与节点之间的互相访问，会因为“距离”的不同导致不同
+的开销。Linux通过struct pglist_data这个结构体来描述节点，对于UMA架构，
+Linux同样会保留节点的概念，只是整个系统就是一个节点，只需要一个
+struct pglist_data来描述，它叫作contig_page_data.
+
+
+contig_page_data
+
+
+*/
 struct bootmem_data;
 typedef struct pglist_data {
+	//MAX_NR_ZONES = 3  ZONE_NORMAL, ZONE_HIGHMEM，ZONE_MOVABLE
 	struct zone node_zones[MAX_NR_ZONES];////是一个数组，包含了结点中各内存域的数据结构 
+	//MAX_ZONELISTS = 1用于分配页框时，查找从哪个zone分配
 	struct zonelist node_zonelists[MAX_ZONELISTS];//指点了备用结点及其内存域的列表，以便在当前结点没有可用空间时，在备用结点分配内存  
 	int nr_zones; //保存结点中不同内存域的数目  
 #ifdef CONFIG_FLAT_NODE_MEM_MAP	/* means !SPARSEMEM */

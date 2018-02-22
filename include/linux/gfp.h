@@ -303,6 +303,7 @@ static inline struct page *
 __alloc_pages(gfp_t gfp_mask, unsigned int order,
 		struct zonelist *zonelist)
 {
+	// 这里是核心函数
 	return __alloc_pages_nodemask(gfp_mask, order, zonelist, NULL);
 }
 
@@ -337,7 +338,8 @@ extern struct page *alloc_pages_vma(gfp_t gfp_mask, int order,
 			int node, bool hugepage);
 #define alloc_hugepage_vma(gfp_mask, vma, addr, order)	\
 	alloc_pages_vma(gfp_mask, order, vma, addr, numa_node_id(), true)
-#else
+
+#else  //NUMA 没有定义 ，所以是走的这里
 #define alloc_pages(gfp_mask, order) \
 		alloc_pages_node(numa_node_id(), gfp_mask, order)
 #define alloc_pages_vma(gfp_mask, order, vma, addr, node, false)\
