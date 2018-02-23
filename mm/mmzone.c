@@ -61,6 +61,7 @@ struct zoneref *next_zones_zonelist(struct zoneref *z,
 	 * Only filter based on nodemask if it's set
 	 */
 	if (likely(nodes == NULL))
+		//1 > 0  所以这返回了 zone_normal
 		while (zonelist_zone_idx(z) > highest_zoneidx)
 			z++;
 	else

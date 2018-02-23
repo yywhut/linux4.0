@@ -43,12 +43,37 @@ typedef void compound_page_dtor(struct page *);
  * allows the use of atomic double word operations on the flags/mapping
  * and lru list pointers also.
  */
+
+
+
+
+//atomic_t _count;          //页引用计数器
+//atomic_t _mapcount;    //页映射计数器
+//paging_init()可以将它们初始化为-1
+//mem_init()可以将所有位码为0的页的_count设置为0
+//page_count和page_mapcount可以统计其实用者个数
+//_count+1为页使用者个数，_mapcount+1为页共享者个数
+// _count为-1时不可被__free_page()释放
+//_mapcount为0表示该页未被共享
+
 struct page {
 	/* First double word block */
+	//flags在page-flags.h文件夹中枚举
+	//paging_init()可设置PG_reserved做flags
+	//mem_init()可设置含PG_reserved的flags清除
+	//#define PG_reserved 11;表示页保留，无法被__free_page()回收
+
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */
+
+
+
+/*page->mapping == 0 属于交换高速缓存页
+*page->mapping != 0 且第0位为1，为匿名页，指向struct anon_vma
+*page->mapping != 0 且第0位为0，指向struct address_space地址空间结构变量
+*/
 	union {
-		struct address_space *mapping;	/* If low bit clear, points to
+		struct address_space *mapping;	/* If low bit clear, points to //该页所在地址空间描述结构指针
 						 * inode address_space, or NULL.
 						 * If page mapped as anonymous
 						 * memory, low bit is set, and
@@ -107,7 +132,7 @@ struct page {
 					 * never succeed on tail
 					 * pages.
 					 */
-					atomic_t _mapcount;
+					atomic_t _mapcount;  //页映射计数器
 
 					struct { /* SLUB */
 						unsigned inuse:16;
@@ -116,15 +141,16 @@ struct page {
 					};
 					int units;	/* SLOB */
 				};
-				atomic_t _count;		/* Usage count, see below. */
+				atomic_t _count;		/* Usage count, see below. */ //页引用计数器
 			};
 			unsigned int active;	/* SLAB */
 		};
 	};
 
 	/* Third double word block */
+	//设置PG_slab，则该页由slab分配器来管理，lru.next指向kmem_cache_t结构变量，lru.prev则指向struct slab结构
 	union {
-		struct list_head lru;	/* Pageout list, eg. active_list
+		struct list_head lru;	/* Pageout list, eg. active_list //最近、最久未使用struct slab结构指针变量
 					 * protected by zone->lru_lock !
 					 * Can be used as a generic list
 					 * by the page owner.
@@ -156,8 +182,12 @@ struct page {
 	};
 
 	/* Remainder is not double word aligned */
+
+	//设置为PG_private，则private字段指向struct buffer_head
+//设置为PG_compound，则指向struct page
+//设置为PG_swapcache，则private为swp_entry_t的成员变量val
 	union {
-		unsigned long private;		/* Mapping-private opaque data:
+		unsigned long private;		/* Mapping-private opaque data:   //私有数据指针
 					 	 * usually used for buffer_heads
 						 * if PagePrivate set; used for
 						 * swp_entry_t if PageSwapCache;

@@ -26,11 +26,11 @@ extern unsigned long max_pfn;
  * memory pages (including holes) on the node.
  */
 typedef struct bootmem_data {
-	unsigned long node_min_pfn;
-	unsigned long node_low_pfn;
-	void *node_bootmem_map;
-	unsigned long last_end_off;
-	unsigned long hint_idx;
+	unsigned long node_min_pfn;  ////内存node空间的物理基址
+	unsigned long node_low_pfn;  //.....物理终址
+	void *node_bootmem_map;   //.....虚拟起始地址，mem_init()可将其清除为NULL
+	unsigned long last_end_off;  //上次分配结束时的地址偏移量
+	unsigned long hint_idx;   //上一次从本内存节点中的物理起始地址的的相对偏移量
 	struct list_head list;
 } bootmem_data_t;
 

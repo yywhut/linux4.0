@@ -919,7 +919,12 @@ void __init setup_arch(char **cmdline_p)
 	parse_early_param();
 
 	early_paging_init(mdesc, lookup_processor_type(read_cpuid_id()));
-	setup_dma_zone(mdesc);
+	setup_dma_zone(mdesc);  //空
+
+	/*
+这个函数主要做两件事情，首先是确定本设备物理内存的各个node各个bank中到底有没有高端内存，
+根据是否存在高端内存决定每个bank的highmem成员值；然后是对于每个bank的正确性进行检测；
+*/
 	sanity_check_meminfo();
 	arm_memblock_init(mdesc);
 

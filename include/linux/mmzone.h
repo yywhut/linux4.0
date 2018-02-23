@@ -88,10 +88,16 @@ static inline int get_pfnblock_migratetype(struct page *page, unsigned long pfn)
 	return get_pfnblock_flags_mask(page, pfn, PB_migrate_end,
 					MIGRATETYPE_MASK);
 }
+/*
+free_list:用于将具有该大小的内存页块连接起来。由于内存页块表示的是连续的物理页，因而对于加入到链表中的每个
+内存页块来说，只需要将内存页块中的第一个页加入该链表即可。因此这些链表连接的是每个内存页块中第一个内存页，
+使用了struct page中的struct list_head成员lru。free_list数组元素的每一个对应一种属性的类型，可用于不同的目地，
+但是它们的大小和组织方式相同。
 
+*/
 struct free_area {
 	struct list_head	free_list[MIGRATE_TYPES];
-	unsigned long		nr_free;
+	unsigned long		nr_free;//内存页块的数目，对于0阶的表示以1页为单位计算，对于1阶的以2页为单位计算，n阶的以2的n次方为单位计算。
 };
 
 struct pglist_data;
@@ -747,8 +753,17 @@ struct bootmem_data;
 typedef struct pglist_data {
 	//MAX_NR_ZONES = 3  ZONE_NORMAL, ZONE_HIGHMEM，ZONE_MOVABLE
 	struct zone node_zones[MAX_NR_ZONES];////是一个数组，包含了结点中各内存域的数据结构 
+	
 	//MAX_ZONELISTS = 1用于分配页框时，查找从哪个zone分配
+	//eason的理解，如果是numa，这个MAX_ZONELISTS可能会等于2，有一条别用的分配列表
+	//在uma中，这个值是1，这个结构体表明在分配内存的时候，首先从哪个node上进行分配
+	//上一行的struct node_zone[]数组中 0-normal,1-HighMem 2-moveable，没有
+	//这里的node_zonelists[]数组中 0-HighMem,1-normal
+	//故其对应关系为node_zonelists[0]->_zonerefs[0] = &node_zones[1]
+	// node_zonelists[0]->_zonerefs[1] = &node_zones[0]
+	// 也就是分配的时候是先从HighMem 开始分配
 	struct zonelist node_zonelists[MAX_ZONELISTS];//指点了备用结点及其内存域的列表，以便在当前结点没有可用空间时，在备用结点分配内存  
+
 	int nr_zones; //保存结点中不同内存域的数目  
 #ifdef CONFIG_FLAT_NODE_MEM_MAP	/* means !SPARSEMEM */
 	struct page *node_mem_map;  //指向page实例数组的指针，用于描述结点的所有物理内存页，它包含了结点中所有内存域的页。  
@@ -1026,6 +1041,9 @@ struct zoneref *next_zones_zonelist(struct zoneref *z,
  * used to iterate the zonelist with next_zones_zonelist by advancing it by
  * one before calling.
  */
+ //这里就是找到第一个可用的zone，当掩码是gfp_kernel的时候， z会加加，返回的就是zone_normal
+ // 这就导致最终只能遍历 zone_normal 这个一zone，但是如果gfp_highuser_movable 的话，
+ // z就不会加加，返回的是zone_high,这样这个链表上就有两个zone，就可以把这两个进行遍历，
 static inline struct zoneref *first_zones_zonelist(struct zonelist *zonelist,
 					enum zone_type highest_zoneidx,
 					nodemask_t *nodes,
@@ -1048,6 +1066,10 @@ static inline struct zoneref *first_zones_zonelist(struct zonelist *zonelist,
  * This iterator iterates though all zones at or below a given zone index and
  * within a given nodemask
  */
+
+//first_zones_zonelist这里就是找到第一个可用的zone，当掩码是gfp_kernel的时候， z会加加，返回的就是zone_normal
+ // 这就导致最终只能遍历 zone_normal 这个一zone，但是如果gfp_highuser_movable 的话，
+ // z就不会加加，返回的是zone_high,这样这个链表上就有两个zone，就可以把这两个进行遍历，
 #define for_each_zone_zonelist_nodemask(zone, z, zlist, highidx, nodemask) \
 	for (z = first_zones_zonelist(zlist, highidx, nodemask, &zone);	\
 		zone;							\

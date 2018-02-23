@@ -66,7 +66,7 @@
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
 #include "internal.h"
-
+alloc_pages
 /* prevent >1 _updater_ of zone percpu pageset ->high and ->batch fields */
 static DEFINE_MUTEX(pcp_batch_high_lock);
 #define MIN_PERCPU_PAGELIST_FRACTION	(8)
@@ -899,12 +899,19 @@ void __init init_cma_reserved_pageblock(struct page *page)
  *
  * -- nyc
  */
+ //	expand(zone, page, order, current_order, area, migratetype);
+ //哪个区域，是normal 还是high  
+ // page的地址
+ //需要分配的order           low
+ // 目前准备切割的order  high
+ // 在哪个area上
 static inline void expand(struct zone *zone, struct page *page,
 	int low, int high, struct free_area *area,
 	int migratetype)
 {
 	unsigned long size = 1 << high;
 
+	// 只有准备切割的order 大于 需要分配的order才进行切割
 	while (high > low) {
 		area--;
 		high--;
@@ -1013,11 +1020,13 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
 		if (list_empty(&area->free_list[migratetype]))
 			continue;
 
+		//取出page
 		page = list_entry(area->free_list[migratetype].next,
 							struct page, lru);
 		list_del(&page->lru);
 		rmv_page_order(page);
 		area->nr_free--;
+		//切蛋糕
 		expand(zone, page, order, current_order, area, migratetype);
 		set_freepage_migratetype(page, migratetype);
 		return page;
@@ -1655,6 +1664,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 	struct page *page;
 	bool cold = ((gfp_flags & __GFP_COLD) != 0);
 
+// 当order== 0的时候，从zone->per_cpu_pageset列表中分配;
 	if (likely(order == 0)) {
 		struct per_cpu_pages *pcp;
 		struct list_head *list;
@@ -1692,6 +1702,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 			WARN_ON_ONCE(order > 1);
 		}
 		spin_lock_irqsave(&zone->lock, flags);
+		//伙伴系统分配函数
 		page = __rmqueue(zone, order, migratetype);
 		spin_unlock(&zone->lock);
 		if (!page)
@@ -1797,6 +1808,12 @@ static inline bool should_fail_alloc_page(gfp_t gfp_mask, unsigned int order)
 /*
  * Return true if free pages are above 'mark'. This takes into account the order
  * of the allocation.
+ */
+ /*
+z 表示要判断的zone，order是 要分配的内存的阶数，mark是要检查的水位，通常检查分配物理内存页面的路径是检查
+WMARK_LOW水位，页面回收kswapd内核线程则是检查WMARK_HIGH水位，这回导致一些问题，
+
+
  */
 static bool __zone_watermark_ok(struct zone *z, unsigned int order,
 			unsigned long mark, int classzone_idx, int alloc_flags,
@@ -2057,6 +2074,7 @@ zonelist_scan:
 								ac->nodemask) {
 		unsigned long mark;
 
+	// 找到zone了以后做一些检查
 		if (IS_ENABLED(CONFIG_NUMA) && zlc_active &&
 			!zlc_zone_worth_trying(zonelist, z, allowednodes))
 				continue;
@@ -2107,7 +2125,9 @@ zonelist_scan:
 		if (consider_zone_dirty && !zone_dirty_ok(zone))
 			continue;
 
+	// 检查这个zone的水位是否充足
 		mark = zone->watermark[alloc_flags & ALLOC_WMARK_MASK];
+		//判断当前空闲页面是否满足WMARK_LOW水位，返回true表示在水位之上
 		if (!zone_watermark_ok(zone, order, mark,
 				       ac->classzone_idx, alloc_flags)) {
 			int ret;
@@ -2141,6 +2161,7 @@ zonelist_scan:
 				!zlc_zone_worth_trying(zonelist, z, allowednodes))
 				continue;
 
+			//如果水位低了，会调用这个来回收页面
 			ret = zone_reclaim(zone, gfp_mask, order);
 			switch (ret) {
 			case ZONE_RECLAIM_NOSCAN:
@@ -2173,6 +2194,7 @@ zonelist_scan:
 		}
 
 try_this_zone:
+		// 如果水位充足，就会走这里从伙伴系统分配物理内存页面
 		page = buffered_rmqueue(ac->preferred_zone, zone, order,
 						gfp_mask, ac->migratetype);
 		if (page) {
@@ -2812,7 +2834,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	//用于保存相关参数的数据结构
 	struct alloc_context ac = {
 	/*根据gfp_mask确定分配页所处的管理区*/  
-		.high_zoneidx = gfp_zone(gfp_mask),//计算出zone的zoneidx
+		.high_zoneidx = gfp_zone(gfp_mask),//计算出zone的zoneidx 这里计算为0
 		.nodemask = nodemask,
 		/*根据gfp_mask得到迁移类分配页的型*/ 
 		.migratetype = gfpflags_to_migratetype(gfp_mask),
@@ -5746,7 +5768,8 @@ static void setup_per_zone_lowmem_reserve(void)
 
 static void __setup_per_zone_wmarks(void)
 {
-	unsigned long pages_min = min_free_kbytes >> (PAGE_SHIFT - 10);
+//min_free_kbytes 是系统启动时通过系统空闲页的数量来计算的 min_free_kbytes =  Hex:0xd8d
+	unsigned long pages_min = min_free_kbytes >> (PAGE_SHIFT - 10); //= 867
 	unsigned long lowmem_pages = 0;
 	struct zone *zone;
 	unsigned long flags;
@@ -5754,7 +5777,7 @@ static void __setup_per_zone_wmarks(void)
 	/* Calculate total number of !ZONE_HIGHMEM pages */
 	for_each_zone(zone) {
 		if (!is_highmem(zone))
-			lowmem_pages += zone->managed_pages;
+			lowmem_pages += zone->managed_pages; //lowmem_pages = 0x2de9d
 	}
 
 	for_each_zone(zone) {
@@ -5786,6 +5809,16 @@ static void __setup_per_zone_wmarks(void)
 			zone->watermark[WMARK_MIN] = tmp;
 		}
 
+	//normal
+	//watermark[0] = 867
+	//watermark[1] = 1083
+	//watermark[2] = 1300
+
+		//high
+		
+	//watermark[0] = 66
+	//watermark[1] = 143
+	//watermark[2] = 221
 		zone->watermark[WMARK_LOW]  = min_wmark_pages(zone) + (tmp >> 2);
 		zone->watermark[WMARK_HIGH] = min_wmark_pages(zone) + (tmp >> 1);
 

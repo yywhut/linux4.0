@@ -49,7 +49,7 @@ struct vm_area_struct;
 #define __GFP_HIGHMEM	((__force gfp_t)___GFP_HIGHMEM)
 #define __GFP_DMA32	((__force gfp_t)___GFP_DMA32)
 #define __GFP_MOVABLE	((__force gfp_t)___GFP_MOVABLE)  /* Page is movable */
-#define GFP_ZONEMASK	(__GFP_DMA|__GFP_HIGHMEM|__GFP_DMA32|__GFP_MOVABLE)
+#define GFP_ZONEMASK	(__GFP_DMA|__GFP_HIGHMEM|__GFP_DMA32|__GFP_MOVABLE)//分配掩码的最低4位
 /*
  * Action modifiers - doesn't change the zoning
  *
@@ -219,7 +219,11 @@ static inline int gfpflags_to_migratetype(const gfp_t gfp_flags)
 #if 16 * ZONES_SHIFT > BITS_PER_LONG
 #error ZONES_SHIFT too large to create GFP_ZONE_TABLE integer
 #endif
-
+//ZONES_SHIFT = 2
+//ZONE_NORMAL = 0  OPT_ZONE_DMA = ZONE_NORMAL = 0
+//1 << 0x02 * 2
+//2 <<(0x08 | 0x02) * 2
+//确实计算出来是 0x200010
 #define GFP_ZONE_TABLE ( \
 	(ZONE_NORMAL << 0 * ZONES_SHIFT)				      \
 	| (OPT_ZONE_DMA << ___GFP_DMA * ZONES_SHIFT)			      \
@@ -252,7 +256,8 @@ static inline enum zone_type gfp_zone(gfp_t flags)
 {
 	enum zone_type z;
 	int bit = (__force int) (flags & GFP_ZONEMASK);
-
+ 	//bit =0xd0 &  0x0f = 0
+	//0x200010 >> 0   &    1 << 2 -1
 	z = (GFP_ZONE_TABLE >> (bit * ZONES_SHIFT)) &
 					 ((1 << ZONES_SHIFT) - 1);
 	VM_BUG_ON((GFP_ZONE_BAD >> bit) & 1);
