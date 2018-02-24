@@ -3668,6 +3668,8 @@ static struct kmem_cache * __init bootstrap(struct kmem_cache *static_cache)
 	return s;
 }
 
+
+// 走的这里
 void __init kmem_cache_init(void)
 {
 	static __initdata struct kmem_cache boot_kmem_cache,
@@ -3749,6 +3751,7 @@ __kmem_cache_alias(const char *name, size_t size, size_t align,
 
 	return s;
 }
+		   kmem_cache_create
 
 int __kmem_cache_create(struct kmem_cache *s, unsigned long flags)
 {

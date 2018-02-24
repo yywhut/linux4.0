@@ -260,9 +260,10 @@ struct per_cpu_pages {
 		 * 高速缓存中的页框个数
 		 */
 
-	int count;		/* number of pages in the list */
-	int high;		/* high watermark, emptying needed */
-	int batch;		/* chunk size for buddy add/remove */
+	int count;		/* number of pages in the list */ //当前zone中per_cpu_pages也面数
+	int high;		/* high watermark, emptying needed */// 表示当缓存的页面高于这水位时，会回收页面到伙伴系统
+	int batch;		/* chunk size for buddy add/remove */// 表示一次回收页面到伙伴系统的页面数量
+	// 通过  zone_batchsize 计算得到，batch = 31  high = 186
 
 	/* Lists of pages, one per migrate type stored on the pcp-lists */
 	struct list_head lists[MIGRATE_PCPTYPES];

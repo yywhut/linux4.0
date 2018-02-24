@@ -186,12 +186,13 @@ static bool pfmemalloc_active __read_mostly;
  * footprint.
  *
  */
+ // slab给每个cpu都提供一个对象缓存池
 struct array_cache {
-	unsigned int avail;
-	unsigned int limit;
+	unsigned int avail;  // 缓冲池中可以用的对象的数目
+	unsigned int limit;  // 这里两个跟kmem_cache数据结构中一样
 	unsigned int batchcount;
-	unsigned int touched;
-	void *entry[];	/*
+	unsigned int touched; // 从缓冲池中移除一个对象置1，收缩时候置0
+	void *entry[];	/*  // 保存对象的实体
 			 * Must have this definition in here for the proper
 			 * alignment of array_cache. Also simplifies accessing
 			 * the entries.

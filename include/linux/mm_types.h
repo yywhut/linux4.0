@@ -186,6 +186,7 @@ struct page {
 	//设置为PG_private，则private字段指向struct buffer_head
 //设置为PG_compound，则指向struct page
 //设置为PG_swapcache，则private为swp_entry_t的成员变量val
+//如果PG_buddy 设定了，则这个值就表示伙伴系统中的order，也就是这个page的order是几
 	union {
 		unsigned long private;		/* Mapping-private opaque data:   //私有数据指针
 					 	 * usually used for buffer_heads

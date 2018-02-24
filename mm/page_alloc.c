@@ -572,6 +572,8 @@ static inline int page_is_buddy(struct page *page, struct page *buddy,
  * -- nyc
  */
 
+
+// 假设A的大小为2个page，pfn为0x8e010， order =1
 static inline void __free_one_page(struct page *page,
 		unsigned long pfn,
 		struct zone *zone, unsigned int order,
@@ -579,7 +581,7 @@ static inline void __free_one_page(struct page *page,
 {
 	unsigned long page_idx;
 	unsigned long combined_idx;
-	unsigned long uninitialized_var(buddy_idx);
+	unsigned long uninitialized_var(buddy_idx);  //  uninitialized_var(x) 是一个简易宏，用于去除编译器对为初始化变量的警告。
 	struct page *buddy;
 	int max_order = MAX_ORDER;
 
@@ -599,31 +601,34 @@ static inline void __free_one_page(struct page *page,
 		__mod_zone_freepage_state(zone, 1 << order, migratetype);
 	}
 
-	page_idx = pfn & ((1 << max_order) - 1);
+	page_idx = pfn & ((1 << max_order) - 1);  // page_idx = 0x10
 
 	VM_BUG_ON_PAGE(page_idx & ((1 << order) - 1), page);
 	VM_BUG_ON_PAGE(bad_range(zone, page), page);
 
+// 这段while 是合并相邻伙伴块的核心代码
 	while (order < max_order - 1) {
-		buddy_idx = __find_buddy_index(page_idx, order);
-		buddy = page + (buddy_idx - page_idx);
-		if (!page_is_buddy(page, buddy, order))
+		buddy_idx = __find_buddy_index(page_idx, order);// 这个计算很有趣，就是计算出这快内存的buddy的idx
+		//buddy_idx = 0x12
+		buddy = page + (buddy_idx - page_idx);  // 算出buddy的page指针
+		if (!page_is_buddy(page, buddy, order)) // 检查B是不是空闲的内存
 			break;
 		/*
 		 * Our buddy is free or it is CONFIG_DEBUG_PAGEALLOC guard page,
 		 * merge with it and move up one order.
 		 */
+		 // 如果内存块在buddy中并且order也相同，该函数返回1
 		if (page_is_guard(buddy)) {
-			clear_page_guard(zone, buddy, order, migratetype);
+			clear_page_guard(zone, buddy, order, migratetype); // 这应该是没打开
 		} else {
 			list_del(&buddy->lru);
 			zone->free_area[order].nr_free--;
 			rmv_page_order(buddy);
 		}
-		combined_idx = buddy_idx & page_idx;
-		page = page + (combined_idx - page_idx);
-		page_idx = combined_idx;
-		order++;
+		combined_idx = buddy_idx & page_idx;  // 算出合并后的idx应该是多少，应该就是0x10
+		page = page + (combined_idx - page_idx);// page不变
+		page_idx = combined_idx;// 还是0x10不变
+		order++;// 跳到下一阶，看能否继续合并
 	}
 	set_page_order(page, order);
 
@@ -648,6 +653,7 @@ static inline void __free_one_page(struct page *page,
 		}
 	}
 
+	// 把page加入链表
 	list_add(&page->lru, &zone->free_area[order].free_list[migratetype]);
 out:
 	zone->free_area[order].nr_free++;
@@ -817,6 +823,7 @@ static bool free_pages_prepare(struct page *page, unsigned int order)
 	return true;
 }
 
+//释放页面到伙伴系统 ，还会处理空闲页面的合并工作
 static void __free_pages_ok(struct page *page, unsigned int order)
 {
 	unsigned long flags;
@@ -902,20 +909,20 @@ void __init init_cma_reserved_pageblock(struct page *page)
  //	expand(zone, page, order, current_order, area, migratetype);
  //哪个区域，是normal 还是high  
  // page的地址
- //需要分配的order           low
- // 目前准备切割的order  high
+ //需要分配的order           low  假设为1  
+ // 目前准备切割的order  high  假设为2
  // 在哪个area上
 static inline void expand(struct zone *zone, struct page *page,
 	int low, int high, struct free_area *area,
 	int migratetype)
 {
-	unsigned long size = 1 << high;
+	unsigned long size = 1 << high;    //1 << 2 所需要4个page
 
 	// 只有准备切割的order 大于 需要分配的order才进行切割
 	while (high > low) {
-		area--;
-		high--;
-		size >>= 1;
+		area--;  // 跳到上一级的area
+		high--;  // high变成1
+		size >>= 1;// 变成2
 		VM_BUG_ON_PAGE(bad_range(zone, &page[size]), &page[size]);
 
 		if (IS_ENABLED(CONFIG_DEBUG_PAGEALLOC) &&
@@ -930,6 +937,8 @@ static inline void expand(struct zone *zone, struct page *page,
 			set_page_guard(zone, &page[size], high, migratetype);
 			continue;
 		}
+
+			//刚好把page[2].lru 相当于第三个page开始的两个page 放入上一级的链表中
 		list_add(&page[size].lru, &area->free_list[migratetype]);
 		area->nr_free++;
 		set_page_order(&page[size], high);
@@ -944,11 +953,11 @@ static inline int check_new_page(struct page *page)
 	const char *bad_reason = NULL;
 	unsigned long bad_flags = 0;
 
-	if (unlikely(page_mapcount(page)))
+	if (unlikely(page_mapcount(page)))  // mapcount 技术应该是0
 		bad_reason = "nonzero mapcount";
-	if (unlikely(page->mapping != NULL))
+	if (unlikely(page->mapping != NULL)) // 这是 page->mapping应该是空
 		bad_reason = "non-NULL mapping";
-	if (unlikely(atomic_read(&page->_count) != 0))
+	if (unlikely(atomic_read(&page->_count) != 0))//page->_count 应该是0,后面会置1
 		bad_reason = "nonzero _count";
 	if (unlikely(page->flags & PAGE_FLAGS_CHECK_AT_PREP)) {
 		bad_reason = "PAGE_FLAGS_CHECK_AT_PREP flag set";
@@ -1717,6 +1726,7 @@ struct page *buffered_rmqueue(struct zone *preferred_zone,
 		set_bit(ZONE_FAIR_DEPLETED, &zone->flags);
 
 	__count_zone_vm_events(PGALLOC, zone, 1 << order);
+	// 做一些统计数据的计算
 	zone_statistics(preferred_zone, zone, gfp_flags);
 	local_irq_restore(flags);
 
@@ -2198,6 +2208,7 @@ try_this_zone:
 		page = buffered_rmqueue(ac->preferred_zone, zone, order,
 						gfp_mask, ac->migratetype);
 		if (page) {
+				// 找到page之后做一些检查
 			if (prep_new_page(page, order, gfp_mask, alloc_flags))
 				goto try_this_zone;
 			return page;
@@ -2937,10 +2948,10 @@ EXPORT_SYMBOL(get_zeroed_page);
 void __free_pages(struct page *page, unsigned int order)
 {
 	if (put_page_testzero(page)) {
-		if (order == 0)
+		if (order == 0)  // 特殊处理
 			free_hot_cold_page(page, false);
 		else
-			__free_pages_ok(page, order);
+			__free_pages_ok(page, order);  // 正常处理
 	}
 }
 

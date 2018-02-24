@@ -287,7 +287,7 @@ static __always_inline int kmalloc_index(size_t size)
 #endif /* !CONFIG_SLOB */
 
 void *__kmalloc(size_t size, gfp_t flags);
-void *kmem_cache_alloc(struct kmem_cache *, gfp_t flags);
+void *kmem_cache_alloc(struct kmem_cache *, gfp_t flags);//是从cachep参数指定的kmem_cache管理的内存缓存池中分配一个对象，其中flags是分配掩码，GFP_KERNEL是不是很熟悉的掩码？
 void kmem_cache_free(struct kmem_cache *, void *);
 
 #ifdef CONFIG_NUMA

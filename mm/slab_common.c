@@ -25,6 +25,23 @@
 
 #include "slab.h"
 
+
+/*
+
+1)kmem_cache_create创建一个kmem_cache数据结构。
+
+2) 使用kmem_cache_alloc接口分配内存，kmem_cache_free接口释放内存。
+
+3) release第一步创建的kmem_cache数据结构。
+
+*/
+
+
+
+
+
+
+
 enum slab_state slab_state;
 LIST_HEAD(slab_caches);
 DEFINE_MUTEX(slab_mutex);
@@ -358,6 +375,19 @@ out_free_cache:
  * cacheline.  This can be beneficial if you're counting cycles as closely
  * as davem.
  */
+
+/*
+
+name：kmem_cache的名称
+    size ：slab管理对象的大小
+
+    align：slab分配器分配内存的对齐字节数(以align字节对齐)
+
+    flags：分配内存掩码
+
+    ctor ：分配对象的构造回调函数
+
+*/			 
 struct kmem_cache *
 kmem_cache_create(const char *name, size_t size, size_t align,
 		  unsigned long flags, void (*ctor)(void *))
@@ -386,6 +416,7 @@ kmem_cache_create(const char *name, size_t size, size_t align,
 	 */
 	flags &= CACHE_CREATE_MASK;
 
+	//
 	s = __kmem_cache_alias(name, size, align, flags, ctor);
 	if (s)
 		goto out_unlock;
@@ -707,6 +738,15 @@ struct kmem_cache *__init create_kmalloc_cache(const char *name, size_t size,
 	s->refcount = 1;
 	return s;
 }
+
+
+/*
+每个数组元素对应一种大小的内存，可以把一个kmem_cache结构体看做是一个特定大小内存的零售商，
+整个slub系统中共有12个这样的零售商，每个“零售商”只“零售”特定大小的内存，例如：有的“零售商”只"零售"8Byte大小
+的内存，有的只”零售“16Byte大小的内存。
+
+
+*/
 
 struct kmem_cache *kmalloc_caches[KMALLOC_SHIFT_HIGH + 1];
 EXPORT_SYMBOL(kmalloc_caches);
