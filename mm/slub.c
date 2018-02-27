@@ -1260,6 +1260,7 @@ static inline void kfree_hook(const void *x)
 	kasan_kfree_large(x);
 }
 
+////钩子函数 可以做一些事情 比如测试和mmcgroup? 
 static inline struct kmem_cache *slab_pre_alloc_hook(struct kmem_cache *s,
 						     gfp_t flags)
 {
@@ -2432,6 +2433,7 @@ static __always_inline void *slab_alloc_node(struct kmem_cache *s,
 	struct page *page;
 	unsigned long tid;
 
+////钩子函数 可以做一些事情 比如测试和mmcgroup? 
 	s = slab_pre_alloc_hook(s, gfpflags);
 	if (!s)
 		return NULL;
@@ -2517,6 +2519,7 @@ static __always_inline void *slab_alloc(struct kmem_cache *s,
 	return slab_alloc_node(s, gfpflags, NUMA_NO_NODE, addr);
 }
 
+//走的这里
 void *kmem_cache_alloc(struct kmem_cache *s, gfp_t gfpflags)
 {
 	void *ret = slab_alloc(s, gfpflags, _RET_IP_);
@@ -3672,6 +3675,7 @@ static struct kmem_cache * __init bootstrap(struct kmem_cache *static_cache)
 // 走的这里
 void __init kmem_cache_init(void)
 {
+////声明静态变量，存储临时kmem_cache管理结构
 	static __initdata struct kmem_cache boot_kmem_cache,
 		boot_kmem_cache_node;
 
@@ -3681,6 +3685,7 @@ void __init kmem_cache_init(void)
 	kmem_cache_node = &boot_kmem_cache_node;
 	kmem_cache = &boot_kmem_cache;
 
+	//申请slub缓冲区，管理数据放在临时结构中
 	create_boot_cache(kmem_cache_node, "kmem_cache_node",
 		sizeof(struct kmem_cache_node), SLAB_HWCACHE_ALIGN);
 
@@ -3694,6 +3699,7 @@ void __init kmem_cache_init(void)
 				nr_node_ids * sizeof(struct kmem_cache_node *),
 		       SLAB_HWCACHE_ALIGN);
 
+	//从刚才挂在临时结构的缓冲区中申请kmem_cache的kmem_cache，并将管理数据拷贝到新申请的内存中
 	kmem_cache = bootstrap(&boot_kmem_cache);
 
 	/*
@@ -3701,6 +3707,7 @@ void __init kmem_cache_init(void)
 	 * kmem_cache_node is separately allocated so no need to
 	 * update any list pointers.
 	 */
+	 //从刚才挂在临时结构的缓冲区中申请kmem_cache_node的kmem_cache，并将管理数据拷贝到新申请的内存中
 	kmem_cache_node = bootstrap(&boot_kmem_cache_node);
 
 	/* Now we can use the kmem_cache to allocate kmalloc slabs */

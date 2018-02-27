@@ -311,6 +311,8 @@ unsigned long calculate_alignment(unsigned long flags,
 	return ALIGN(align, sizeof(void *));
 }
 
+
+//20,20,8,0,
 static struct kmem_cache *
 do_kmem_cache_create(const char *name, size_t object_size, size_t size,
 		     size_t align, unsigned long flags, void (*ctor)(void *),
@@ -320,6 +322,7 @@ do_kmem_cache_create(const char *name, size_t object_size, size_t size,
 	int err;
 
 	err = -ENOMEM;
+	//首先创建一个kmem_cache 数据结构
 	s = kmem_cache_zalloc(kmem_cache, GFP_KERNEL);
 	if (!s)
 		goto out;
@@ -334,11 +337,13 @@ do_kmem_cache_create(const char *name, size_t object_size, size_t size,
 	if (err)
 		goto out_free_cache;
 
+	//创建slab缓冲区
 	err = __kmem_cache_create(s, flags);
 	if (err)
 		goto out_free_cache;
 
 	s->refcount = 1;
+	//把这个新创建的slab加入全局链表
 	list_add(&s->list, &slab_caches);
 out:
 	if (err)
@@ -402,7 +407,7 @@ kmem_cache_create(const char *name, size_t size, size_t align,
 
 	mutex_lock(&slab_mutex);
 
-	err = kmem_cache_sanity_check(name, size);
+	err = kmem_cache_sanity_check(name, size);// 空
 	if (err) {
 		s = NULL;	/* suppress uninit var warning */
 		goto out_unlock;
@@ -416,7 +421,7 @@ kmem_cache_create(const char *name, size_t size, size_t align,
 	 */
 	flags &= CACHE_CREATE_MASK;
 
-	//
+	//首先查找是否有现成的slab描述符
 	s = __kmem_cache_alias(name, size, align, flags, ctor);
 	if (s)
 		goto out_unlock;
@@ -427,6 +432,7 @@ kmem_cache_create(const char *name, size_t size, size_t align,
 		goto out_unlock;
 	}
 
+//创建一个slab描述符
 	s = do_kmem_cache_create(cache_name, size, size,
 				 calculate_alignment(flags, align, size),
 				 flags, ctor, NULL, NULL);

@@ -150,7 +150,7 @@
 #endif
 
 /* Shouldn't this be in a header file somewhere? */
-#define	BYTES_PER_WORD		sizeof(void *)
+#define	BYTES_PER_WORD		sizeof(void *)  // 4bytes
 #define	REDZONE_ALIGN		max(BYTES_PER_WORD, __alignof__(unsigned long long))
 
 #ifndef ARCH_KMALLOC_FLAGS
@@ -479,16 +479,19 @@ static size_t calculate_freelist_size(int nr_objs, size_t align)
 {
 	size_t freelist_size;
 
+//163 = 163 * 1
 	freelist_size = nr_objs * sizeof(freelist_idx_t);
 	if (IS_ENABLED(CONFIG_DEBUG_SLAB_LEAK))
 		freelist_size += nr_objs * sizeof(char);
 
+	//freelist_size 168  8字节对齐
 	if (align)
 		freelist_size = ALIGN(freelist_size, align);
 
 	return freelist_size;
 }
 
+//刚进来 slab_size 4096  buffer_size24 idx_size 1 align 8
 static int calculate_nr_objs(size_t slab_size, size_t buffer_size,
 				size_t idx_size, size_t align)
 {
@@ -507,14 +510,16 @@ static int calculate_nr_objs(size_t slab_size, size_t buffer_size,
 	 * into the memory allocation when taking the padding
 	 * into account.
 	 */
+	 //163
 	nr_objs = slab_size / (buffer_size + idx_size + extra_space);
 
 	/*
 	 * This calculated number will be either the right
 	 * amount, or one greater than what we want.
 	 */
-	remained_size = slab_size - nr_objs * buffer_size;
-	freelist_size = calculate_freelist_size(nr_objs, align);
+	 //4096 - 163 *24
+	remained_size = slab_size - nr_objs * buffer_size;//184
+	freelist_size = calculate_freelist_size(nr_objs, align);  //168
 	if (remained_size < freelist_size)
 		nr_objs--;
 
@@ -530,7 +535,7 @@ static void cache_estimate(unsigned long gfporder, size_t buffer_size,
 {
 	int nr_objs;
 	size_t mgmt_size;
-	size_t slab_size = PAGE_SIZE << gfporder;
+	size_t slab_size = PAGE_SIZE << gfporder; // 第一次进来就是4096
 
 	/*
 	 * The slab management structure can be either off the slab or
@@ -551,12 +556,14 @@ static void cache_estimate(unsigned long gfporder, size_t buffer_size,
 		nr_objs = slab_size / buffer_size;
 
 	} else {
+		//计算为163
 		nr_objs = calculate_nr_objs(slab_size, buffer_size,
 					sizeof(freelist_idx_t), align);
-		mgmt_size = calculate_freelist_size(nr_objs, align);
+		mgmt_size = calculate_freelist_size(nr_objs, align); //168
 	}
 	*num = nr_objs;
-	*left_over = slab_size - nr_objs*buffer_size - mgmt_size;
+	//4096 - 163 *24 - 168
+	*left_over = slab_size - nr_objs*buffer_size - mgmt_size; //16
 }
 
 #if DEBUG
@@ -1928,11 +1935,13 @@ static size_t calculate_slab_order(struct kmem_cache *cachep,
 	size_t left_over = 0;
 	int gfporder;
 
+//KMALLOC_MAX_ORDER = 25
 	for (gfporder = 0; gfporder <= KMALLOC_MAX_ORDER; gfporder++) {
 		unsigned int num;
 		size_t remainder;
 
 		cache_estimate(gfporder, size, align, flags, &remainder, &num);
+		//remainder = 16 num = 163
 		if (!num)
 			continue;
 
@@ -1957,9 +1966,9 @@ static size_t calculate_slab_order(struct kmem_cache *cachep,
 		}
 
 		/* Found something acceptable - save it away */
-		cachep->num = num;
+		cachep->num = num; //163
 		cachep->gfporder = gfporder;
-		left_over = remainder;
+		left_over = remainder; //16
 
 		/*
 		 * A VFS-reclaimable slab tends to have most allocations
@@ -1979,10 +1988,11 @@ static size_t calculate_slab_order(struct kmem_cache *cachep,
 		/*
 		 * Acceptable internal fragmentation?
 		 */
+		 //16 * 8 <= 4096
 		if (left_over * 8 <= (PAGE_SIZE << gfporder))
 			break;
 	}
-	return left_over;
+	return left_over; //16
 }
 
 static struct array_cache __percpu *alloc_kmem_cache_cpus(
@@ -2124,6 +2134,7 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 	 * unaligned accesses for some archs when redzoning is used, and makes
 	 * sure any on-slab bufctl's are also correctly aligned.
 	 */
+	 //检查是否是4个字节对齐
 	if (size & (BYTES_PER_WORD - 1)) {
 		size += (BYTES_PER_WORD - 1);
 		size &= ~(BYTES_PER_WORD - 1);
@@ -2138,6 +2149,7 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 	}
 
 	/* 3) caller mandated alignment */
+	//计算aline的大小，这个例子中是8bytes
 	if (ralign < cachep->align) {
 		ralign = cachep->align;
 	}
@@ -2149,8 +2161,9 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 	 */
 	cachep->align = ralign;
 
+//小技巧，判断 slab_state 的状态，这个是个枚举类型
 	if (slab_is_available())
-		gfp = GFP_KERNEL;
+		gfp = GFP_KERNEL; // 走的这里
 	else
 		gfp = GFP_NOWAIT;
 
@@ -2199,7 +2212,7 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 		 */
 		flags |= CFLGS_OFF_SLAB;
 
-	size = ALIGN(size, cachep->align);
+	size = ALIGN(size, cachep->align); //20个字节8bytes对齐，得到 24
 	/*
 	 * We should restrict the number of objects in a slab to implement
 	 * byte sized index. Refer comment on SLAB_OBJ_MIN_SIZE definition.
@@ -2208,22 +2221,23 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 		size = ALIGN(SLAB_OBJ_MIN_SIZE, cachep->align);
 
 	left_over = calculate_slab_order(cachep, size, cachep->align, flags);
-
+//left_over = 16
 	if (!cachep->num)
 		return -E2BIG;
-
+//cachep->num 163  cachep->align = 8
 	freelist_size = calculate_freelist_size(cachep->num, cachep->align);
+	//freelist_size = 168
 
 	/*
 	 * If the slab has been placed off-slab, and we have enough space then
 	 * move it on-slab. This is at the expense of any extra colouring.
 	 */
-	if (flags & CFLGS_OFF_SLAB && left_over >= freelist_size) {
+	if (flags & CFLGS_OFF_SLAB && left_over >= freelist_size) { //no
 		flags &= ~CFLGS_OFF_SLAB;
 		left_over -= freelist_size;
 	}
 
-	if (flags & CFLGS_OFF_SLAB) {
+	if (flags & CFLGS_OFF_SLAB) {//no
 		/* really off slab. No need for manual alignment */
 		freelist_size = calculate_freelist_size(cachep->num, 0);
 
@@ -2237,14 +2251,14 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 #endif
 	}
 
-	cachep->colour_off = cache_line_size();
+	cachep->colour_off = cache_line_size(); //16 32 或者64  这里跑的是64
 	/* Offset must be a multiple of the alignment. */
 	if (cachep->colour_off < cachep->align)
 		cachep->colour_off = cachep->align;
-	cachep->colour = left_over / cachep->colour_off;
-	cachep->freelist_size = freelist_size;
-	cachep->flags = flags;
-	cachep->allocflags = __GFP_COMP;
+	cachep->colour = left_over / cachep->colour_off;//0
+	cachep->freelist_size = freelist_size;//168
+	cachep->flags = flags;//0
+	cachep->allocflags = __GFP_COMP;//Hex:0x4000
 	if (CONFIG_ZONE_DMA_FLAG && (flags & SLAB_CACHE_DMA))
 		cachep->allocflags |= GFP_DMA;
 	cachep->size = size;
