@@ -2002,6 +2002,8 @@ static struct array_cache __percpu *alloc_kmem_cache_cpus(
 	size_t size;
 	struct array_cache __percpu *cpu_cache;
 
+	//4 * 120 +
+	//size= 496   为什么加了16
 	size = sizeof(void *) * entries + sizeof(struct array_cache);
 	cpu_cache = __alloc_percpu(size, sizeof(void *));
 
@@ -3405,6 +3407,7 @@ static inline void __cache_free(struct kmem_cache *cachep, void *objp,
  * Allocate an object from this cache.  The flags are only relevant
  * if the cache has no available objects.
  */
+ //分配slab缓存对象
 void *kmem_cache_alloc(struct kmem_cache *cachep, gfp_t flags)
 {
 	void *ret = slab_alloc(cachep, flags, _RET_IP_);
@@ -3588,7 +3591,7 @@ void kfree(const void *objp)
 }
 EXPORT_SYMBOL(kfree);
 
-/*
+/*kmem_cache_zalloc
  * This initializes kmem_cache_node or resizes various caches for all nodes.
  */
 static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
@@ -3598,16 +3601,20 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 	struct array_cache *new_shared;
 	struct alien_cache **new_alien = NULL;
 
+
+//遍历所有NUMA节点
 	for_each_online_node(node) {
 
-		if (use_alien_caches) {
+		if (use_alien_caches) { //空
 			new_alien = alloc_alien_cache(node, cachep->limit, gfp);
 			if (!new_alien)
 				goto fail;
 		}
 
 		new_shared = NULL;
+		//cachep->shared = 8
 		if (cachep->shared) {
+			//分配共享对象缓冲池 为多核cpu之间共享空闲缓存对象
 			new_shared = alloc_arraycache(node,
 				cachep->shared*cachep->batchcount,
 					0xbaadf00d, gfp);
@@ -3616,6 +3623,8 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 				goto fail;
 			}
 		}
+
+		//获取系统中的 kmem_cache_node 节点，在我们的例子中还没有分配，所以走的下面
 
 		n = get_node(cachep, node);
 		if (n) {
@@ -3641,6 +3650,8 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 			free_alien_cache(new_alien);
 			continue;
 		}
+
+		
 		n = kmalloc_node(sizeof(struct kmem_cache_node), gfp, node);
 		if (!n) {
 			free_alien_cache(new_alien);
@@ -3678,12 +3689,15 @@ fail:
 }
 
 /* Always called with the slab_mutex held */
+////limit:120 batchcount:60 shared:8 gfp:208
+
 static int __do_tune_cpucache(struct kmem_cache *cachep, int limit,
 				int batchcount, int shared, gfp_t gfp)
 {
 	struct array_cache __percpu *cpu_cache, *prev;
 	int cpu;
 
+//分配per-cpu类型的array_cache指针，称为对象缓冲池，每个cpu都有这个对象
 	cpu_cache = alloc_kmem_cache_cpus(cachep, limit, batchcount);
 	if (!cpu_cache)
 		return -ENOMEM;
@@ -3697,7 +3711,7 @@ static int __do_tune_cpucache(struct kmem_cache *cachep, int limit,
 	cachep->limit = limit;
 	cachep->shared = shared;
 
-	if (!prev)
+	if (!prev)// 应该是空
 		goto alloc_node;
 
 	for_each_online_cpu(cpu) {
@@ -3716,9 +3730,12 @@ static int __do_tune_cpucache(struct kmem_cache *cachep, int limit,
 	free_percpu(prev);
 
 alloc_node:
+	//继续初始化slab
 	return alloc_kmem_cache_node(cachep, gfp);
 }
 
+
+////limit:120 batchcount:60 shared:8 gfp:208
 static int do_tune_cpucache(struct kmem_cache *cachep, int limit,
 				int batchcount, int shared, gfp_t gfp)
 {
@@ -3768,6 +3785,7 @@ static int enable_cpucache(struct kmem_cache *cachep, gfp_t gfp)
 	 * The numbers are guessed, we should auto-tune as described by
 	 * Bonwick.
 	 */
+	 //cachep->size  = 24  根据对象大小来计算空闲对象的最大阈值limit
 	if (cachep->size > 131072)
 		limit = 1;
 	else if (cachep->size > PAGE_SIZE)
@@ -3789,6 +3807,7 @@ static int enable_cpucache(struct kmem_cache *cachep, gfp_t gfp)
 	 * to a larger limit. Thus disabled by default.
 	 */
 	shared = 0;
+	// 在smp系统中，slab对象不大于一个page的情况下 shared这个变量的值为8
 	if (cachep->size <= PAGE_SIZE && num_possible_cpus() > 1)
 		shared = 8;
 
@@ -3800,8 +3819,11 @@ static int enable_cpucache(struct kmem_cache *cachep, gfp_t gfp)
 	if (limit > 32)
 		limit = 32;
 #endif
-	batchcount = (limit + 1) / 2;
+//batchcount一般是limit的一半，用于本地缓冲池和共享缓冲池之间填充对象的数量
+	batchcount = (limit + 1) / 2; //=60
 skip_setup:
+	//继续配置slab描述符
+	//limit:120 batchcount:60 shared:8 gfp:208
 	err = do_tune_cpucache(cachep, limit, batchcount, shared, gfp);
 	if (err)
 		printk(KERN_ERR "enable_cpucache failed for %s, error %d.\n",
