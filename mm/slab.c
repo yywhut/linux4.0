@@ -783,7 +783,7 @@ static inline void *ac_get_obj(struct kmem_cache *cachep,
 	if (unlikely(sk_memalloc_socks()))
 		objp = __ac_get_obj(cachep, ac, flags, force_refill);
 	else
-		objp = ac->entry[--ac->avail];
+		objp = ac->entry[--ac->avail];// 获取对象，对象是数组指针？
 
 	return objp;
 }
@@ -1581,6 +1581,8 @@ static struct page *kmem_getpages(struct kmem_cache *cachep, gfp_t flags,
 	struct page *page;
 	int nr_pages;
 
+	//设置flags，如果此高速缓存内存位于dma时，gfpflags就不为0.反而是在标志的某一位设置为1.
+
 	flags |= cachep->allocflags;
 	if (cachep->flags & SLAB_RECLAIM_ACCOUNT)
 		flags |= __GFP_RECLAIMABLE;
@@ -1588,6 +1590,7 @@ static struct page *kmem_getpages(struct kmem_cache *cachep, gfp_t flags,
 	if (memcg_charge_slab(cachep, flags, cachep->gfporder))
 		return NULL;
 
+// 这里应该是伙伴系统了吧
 	page = alloc_pages_exact_node(nodeid, flags | __GFP_NOTRACK, cachep->gfporder);
 	if (!page) {
 		memcg_uncharge_slab(cachep, cachep->gfporder);
@@ -1599,7 +1602,7 @@ static struct page *kmem_getpages(struct kmem_cache *cachep, gfp_t flags,
 	if (unlikely(page->pfmemalloc))
 		pfmemalloc_active = true;
 
-	nr_pages = (1 << cachep->gfporder);
+	nr_pages = (1 << cachep->gfporder);//这里是统计申请到的页数。
 	if (cachep->flags & SLAB_RECLAIM_ACCOUNT)
 		add_zone_page_state(page_zone(page),
 			NR_SLAB_RECLAIMABLE, nr_pages);
@@ -2459,18 +2462,19 @@ static void *alloc_slabmgmt(struct kmem_cache *cachep,
 	void *freelist;
 	void *addr = page_address(page);
 
+	/*如果slab管理区位于slab外，则在指定的slabp_cache中分配空间*/  
 	if (OFF_SLAB(cachep)) {
 		/* Slab management obj is off-slab. */
 		freelist = kmem_cache_alloc_node(cachep->freelist_cache,
 					      local_flags, nodeid);
 		if (!freelist)
 			return NULL;
-	} else {
+	} else {/*slab管理区处于slab中*/  /*slab管理区从slab首部偏移颜色值的地方开始*/  
 		freelist = addr + colour_off;
 		colour_off += cachep->freelist_size;
 	}
 	page->active = 0;
-	page->s_mem = addr + colour_off;
+	page->s_mem = addr + colour_off;//在这里指向第一个obj
 	return freelist;
 }
 
@@ -2491,6 +2495,7 @@ static void cache_init_objs(struct kmem_cache *cachep,
 	int i;
 
 	for (i = 0; i < cachep->num; i++) {
+		/*得到第i个对象*/  
 		void *objp = index_to_obj(cachep, page, i);
 #if DEBUG
 		/* need to poison the objs? */
@@ -2648,13 +2653,18 @@ static int cache_grow(struct kmem_cache *cachep,
 		goto failed;
 
 	/* Get slab management. */
+	/*分配slab管理区*/  
 	freelist = alloc_slabmgmt(cachep, page, offset,
 			local_flags & ~GFP_CONSTRAINT_MASK, nodeid);
 	if (!freelist)
 		goto opps1;
 
+	/*建立页面到slab和cache的映射，以便于根据obj迅速定位slab描述符和cache描述符*/ 
+	 //利用页描述结构的lru域建立页框到slab描述符和cache描述符的映射，
+	 //实际就是使lru.next指向cache描述符，lru.prev指向slab描述符
 	slab_map_pages(cachep, page, freelist);
 
+	 /*初始化对象*/  
 	cache_init_objs(cachep, page);
 
 	if (local_flags & __GFP_WAIT)
@@ -2663,6 +2673,7 @@ static int cache_grow(struct kmem_cache *cachep,
 	spin_lock(&n->list_lock);
 
 	/* Make slab active. */
+	 /*将新创建的slab添加到free链表*/  
 	list_add_tail(&page->lru, &(n->slabs_free));
 	STATS_INC_GROWN(cachep);
 	n->free_objects += cachep->num;
@@ -2774,7 +2785,7 @@ static void *cache_alloc_refill(struct kmem_cache *cachep, gfp_t flags,
 	if (unlikely(force_refill))
 		goto force_grow;
 retry:
-	ac = cpu_cache_get(cachep);
+	ac = cpu_cache_get(cachep); //获取本地缓冲池ac
 	batchcount = ac->batchcount;
 	if (!ac->touched && batchcount > BATCHREFILL_LIMIT) {
 		/*
@@ -2784,12 +2795,14 @@ retry:
 		 */
 		batchcount = BATCHREFILL_LIMIT;
 	}
-	n = get_node(cachep, node);
+	n = get_node(cachep, node);// 获取salb节点n
 
 	BUG_ON(ac->avail > 0 || !n);
 	spin_lock(&n->list_lock);
 
-	/* See if we can refill from the shared array */
+	/* See if we can refill from the shared array *///
+	//首先判断共享对象缓冲池中有没有空闲的对象。如果有，就迁移batchcount个空闲对象
+	// 到本地对象缓冲池中
 	if (n->shared && transfer_objects(ac, n->shared, batchcount)) {
 		n->shared->touched = 1;
 		goto alloc_done;
@@ -2834,6 +2847,7 @@ retry:
 			list_add(&page->lru, &n->slabs_partial);
 	}
 
+//  真正第一次分配
 must_grow:
 	n->free_objects -= ac->avail;
 alloc_done:
@@ -2955,6 +2969,7 @@ static inline void *____cache_alloc(struct kmem_cache *cachep, gfp_t flags)
 	}
 
 	STATS_INC_ALLOCMISS(cachep);
+	//第一次没有对象的时候是走这里
 	objp = cache_alloc_refill(cachep, flags, force_refill);
 	/*
 	 * the 'ac' may be updated by cache_alloc_refill(),

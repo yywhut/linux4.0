@@ -80,7 +80,7 @@ struct page {
 						 * it points to anon_vma object:
 						 * see PAGE_MAPPING_ANON below.
 						 */
-		void *s_mem;			/* slab first object */
+		void *s_mem;			/* slab first object 指向第一个obj*/  
 	};
 
 	/* Second double word */
