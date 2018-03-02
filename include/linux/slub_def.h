@@ -83,7 +83,7 @@ struct kmem_cache {
 
 	//一个per cpu变量，对于每个cpu来说，相当于一个本地内存缓存池。当分配内存的时候优先从本地cpu分
 	//配内存以保证cache的命中率。
-	struct kmem_cache_cpu __percpu *cpu_slab;
+	struct kmem_cache_cpu __percpu *cpu_slab;  // 这个结构需要重新分配
 	/* Used for retriving partial slabs etc */
 
 	//object分配掩码，例如经常使用的SLAB_HWCACHE_ALIGN标志位，代表创建的kmem_cache管理的object按照

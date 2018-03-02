@@ -187,12 +187,18 @@ static bool pfmemalloc_active __read_mostly;
  *
  */
  // slab给每个cpu都提供一个对象缓存池
+/*
+objp = ac->entry[--ac->avail];
+由于ac是记录着这次struct arrary_cache结构体存放地址，通过ac->entry数组，我们就得到下一紧接地址，
+这个地址可以看做是为本高速缓存内存的内存对象指针存放首地址，这里可以看出，我们是从最后一个对象
+开始分配的即avail对应的空闲对象是最热的，即最近释放出来的，更有可能驻留在CPU高速缓存中。
+*/
 struct array_cache {
 	unsigned int avail;  // 缓冲池中可以用的对象的数目
 	unsigned int limit;  // 这里两个跟kmem_cache数据结构中一样
 	unsigned int batchcount;
 	unsigned int touched; // 从缓冲池中移除一个对象置1，收缩时候置0
-	void *entry[];	/*  // 保存对象的实体
+	void *entry[];	/*  // 保存对象的实体               例子中这里是分配了120个 指针
 			 * Must have this definition in here for the proper
 			 * alignment of array_cache. Also simplifies accessing
 			 * the entries.
@@ -511,6 +517,7 @@ static int calculate_nr_objs(size_t slab_size, size_t buffer_size,
 	 * into account.
 	 */
 	 //163
+	 //4096/ (24+1)
 	nr_objs = slab_size / (buffer_size + idx_size + extra_space);
 
 	/*
@@ -529,6 +536,8 @@ static int calculate_nr_objs(size_t slab_size, size_t buffer_size,
 /*
  * Calculate the number of objects and left-over bytes for a given buffer size.
  */
+
+//0   24  8  0				
 static void cache_estimate(unsigned long gfporder, size_t buffer_size,
 			   size_t align, int flags, size_t *left_over,
 			   unsigned int *num)
@@ -557,13 +566,14 @@ static void cache_estimate(unsigned long gfporder, size_t buffer_size,
 
 	} else {
 		//计算为163
+		//slab_size = 4096.buffer_size = 24
 		nr_objs = calculate_nr_objs(slab_size, buffer_size,
 					sizeof(freelist_idx_t), align);
 		mgmt_size = calculate_freelist_size(nr_objs, align); //168
 	}
 	*num = nr_objs;
 	//4096 - 163 *24 - 168
-	*left_over = slab_size - nr_objs*buffer_size - mgmt_size; //16
+	*left_over = slab_size - nr_objs*buffer_size - mgmt_size; //16 就是 colour所剩的字节数
 }
 
 #if DEBUG
@@ -686,7 +696,7 @@ static void init_arraycache(struct array_cache *ac, int limit, int batch)
 static struct array_cache *alloc_arraycache(int node, int entries,
 					    int batchcount, gfp_t gfp)
 {
-	size_t memsize = sizeof(void *) * entries + sizeof(struct array_cache);
+	size_t memsize = sizeof(void *) * entries + sizeof(struct array_cache);//1936
 	struct array_cache *ac = NULL;
 
 	ac = kmalloc_node(memsize, gfp, node);
@@ -1943,6 +1953,7 @@ static size_t calculate_slab_order(struct kmem_cache *cachep,
 		unsigned int num;
 		size_t remainder;
 
+	// num 就是obj的个数
 		cache_estimate(gfporder, size, align, flags, &remainder, &num);
 		//remainder = 16 num = 163
 		if (!num)
@@ -2001,6 +2012,9 @@ static size_t calculate_slab_order(struct kmem_cache *cachep,
 static struct array_cache __percpu *alloc_kmem_cache_cpus(
 		struct kmem_cache *cachep, int entries, int batchcount)
 {
+
+	//entries 是limit，也就是cache中存放obj个数
+
 	int cpu;
 	size_t size;
 	struct array_cache __percpu *cpu_cache;
@@ -2008,11 +2022,18 @@ static struct array_cache __percpu *alloc_kmem_cache_cpus(
 	//4 * 120 +
 	//size= 496   为什么加了16
 	size = sizeof(void *) * entries + sizeof(struct array_cache);
+	// 这里很重要
+	// 我的理解这里分配就是前面16个字节的变量，再加上后面120个指针，也就是void *entry[]，有120个指针
+
+
+	
+	//  sizeof(void *) 表示4字节对齐
 	cpu_cache = __alloc_percpu(size, sizeof(void *));
 
 	if (!cpu_cache)
 		return NULL;
 
+	// 取出每个cpu变量的地址，对其中的数据进行赋值。
 	for_each_possible_cpu(cpu) {
 		init_arraycache(per_cpu_ptr(cpu_cache, cpu),
 				entries, batchcount);
@@ -2024,7 +2045,7 @@ static struct array_cache __percpu *alloc_kmem_cache_cpus(
 static int __init_refok setup_cpu_cache(struct kmem_cache *cachep, gfp_t gfp)
 {
 	if (slab_state >= FULL)
-		return enable_cpucache(cachep, gfp);
+		return enable_cpucache(cachep, gfp);//直接返回
 
 	cachep->cpu_cache = alloc_kmem_cache_cpus(cachep, 1, 1);
 	if (!cachep->cpu_cache)
@@ -2111,10 +2132,10 @@ int
 __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 {
 	size_t left_over, freelist_size;
-	size_t ralign = BYTES_PER_WORD;
+	size_t ralign = BYTES_PER_WORD; //4
 	gfp_t gfp;
 	int err;
-	size_t size = cachep->size;
+	size_t size = cachep->size;//20
 
 #if DEBUG
 #if FORCED_DEBUG
@@ -2145,7 +2166,7 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 		size &= ~(BYTES_PER_WORD - 1);
 	}
 
-	if (flags & SLAB_RED_ZONE) {
+	if (flags & SLAB_RED_ZONE) {//没进
 		ralign = REDZONE_ALIGN;
 		/* If redzoning, ensure that the second redzone is suitably
 		 * aligned, by adjusting the object size accordingly. */
@@ -2209,6 +2230,7 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 	 * it too early on. Always use on-slab management when
 	 * SLAB_NOLEAKTRACE to avoid recursive calls into kmemleak)
 	 */
+	 //没进
 	if ((size >= (PAGE_SIZE >> 5)) && !slab_early_init &&
 	    !(flags & SLAB_NOLEAKTRACE))
 		/*
@@ -3630,6 +3652,7 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 		//cachep->shared = 8
 		if (cachep->shared) {
 			//分配共享对象缓冲池 为多核cpu之间共享空闲缓存对象
+			// 分配了 8 * 60 个 obj
 			new_shared = alloc_arraycache(node,
 				cachep->shared*cachep->batchcount,
 					0xbaadf00d, gfp);
@@ -3666,7 +3689,7 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 			continue;
 		}
 
-		
+		// 在这里分配了kmem_cache_node
 		n = kmalloc_node(sizeof(struct kmem_cache_node), gfp, node);
 		if (!n) {
 			free_alien_cache(new_alien);
@@ -3674,13 +3697,17 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 			goto fail;
 		}
 
+	// 初始化node结构中的数据，包括那三条链表
 		kmem_cache_node_init(n);
 		n->next_reap = jiffies + REAPTIMEOUT_NODE +
 				((unsigned long)cachep) % REAPTIMEOUT_NODE;
-		n->shared = new_shared;
+		n->shared = new_shared;// 分配的那8*60个共享的obj
 		n->alien = new_alien;
+
+		// 283 = 2 * 60 + 163
 		n->free_limit = (1 + nr_cpus_node(node)) *
 					cachep->batchcount + cachep->num;
+		// 赋值kmem_cache_node
 		cachep->node[node] = n;
 	}
 	return 0;
@@ -3717,6 +3744,7 @@ static int __do_tune_cpucache(struct kmem_cache *cachep, int limit,
 	if (!cpu_cache)
 		return -ENOMEM;
 
+//将cachep 的缓冲池更换为刚分配的本地cpu缓冲池
 	prev = cachep->cpu_cache;
 	cachep->cpu_cache = cpu_cache;
 	kick_all_cpus_sync();
@@ -3745,7 +3773,7 @@ static int __do_tune_cpucache(struct kmem_cache *cachep, int limit,
 	free_percpu(prev);
 
 alloc_node:
-	//继续初始化slab
+	//继续初始化kmem_cache中的	struct kmem_cache_node *node[MAX_NUMNODES]; 这个结构
 	return alloc_kmem_cache_node(cachep, gfp);
 }
 
@@ -3766,7 +3794,7 @@ static int do_tune_cpucache(struct kmem_cache *cachep, int limit,
 		return ret;
 
 	lockdep_assert_held(&slab_mutex);
-	for_each_memcg_cache(c, cachep) {
+	for_each_memcg_cache(c, cachep) {  // 好像是没有执行
 		/* return value determined by the root cache only */
 		__do_tune_cpucache(c, limit, batchcount, shared, gfp);
 	}
@@ -3782,7 +3810,7 @@ static int enable_cpucache(struct kmem_cache *cachep, gfp_t gfp)
 	int shared = 0;
 	int batchcount = 0;
 
-	if (!is_root_cache(cachep)) {
+	if (!is_root_cache(cachep)) {// 没进
 		struct kmem_cache *root = memcg_root_cache(cachep);
 		limit = root->limit;
 		shared = root->shared;

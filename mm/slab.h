@@ -47,6 +47,18 @@ struct kmem_cache {
  * have the problem that the structures used for managing slab caches are
  * allocated from slab caches themselves.
  */
+
+/*
+内核使用了一个枚举变量 g_cpucache_up ，其接受的变量范围有：NULL , PARTIAL_AC , 
+PARTIAL_L3，PEARLY , FULL 。当第二步完成的时候，标记为 PARTIAL_AC ，此时意味着以后的
+struct array_cache 都可以使用 kmalloc() 分配了；当第三步完成的时候，标记为
+PARTIAL_L3 ，此时意味着以后的 struct kmem_l3 都可以使用；当第四和第五步完成的时候，
+标记为 PARTIAL_EARLY ，此时意味着 kmalloc() 已经支持所有其支持的 2^n 大小的内存
+分配了。
+
+*/
+
+
 enum slab_state {
 	DOWN,			/* No slab functionality yet */
 	PARTIAL,		/* SLUB: kmem_cache_node available */
