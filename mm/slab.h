@@ -326,7 +326,7 @@ static inline struct kmem_cache *cache_from_obj(struct kmem_cache *s, void *x)
 	if (!memcg_kmem_enabled() && !unlikely(s->flags & SLAB_DEBUG_FREE))
 		return s;
 
-	page = virt_to_head_page(x);
+	page = virt_to_head_page(x);//虚拟地址找到对应的page，并且是第一个page头
 	cachep = page->slab_cache;
 	if (slab_equal_or_root(cachep, s))
 		return cachep;
@@ -345,12 +345,13 @@ struct kmem_cache_node {
 	spinlock_t list_lock;
 
 #ifdef CONFIG_SLAB
+// 这些链表挂的都是page结构中的lru，所以需要反向查找page的时候需要用到
 	struct list_head slabs_partial;	/* partial list first, better asm code */
 	struct list_head slabs_full;
 	struct list_head slabs_free;
 	unsigned long free_objects;  //上述三个链表中空闲对象的综合
 	unsigned int free_limit;  // 所有slab上容许空闲对象的最大数目
-	unsigned int colour_next;	/* Per-node cache coloring */
+	unsigned int colour_next;	/* Per-node cache coloring */ // 从0开始++
 	struct array_cache *shared;	/* shared per node */
 	struct alien_cache **alien;	/* on other nodes */
 	unsigned long next_reap;	/* updated without locking */

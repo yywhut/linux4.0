@@ -193,8 +193,11 @@ objp = ac->entry[--ac->avail];
 这个地址可以看做是为本高速缓存内存的内存对象指针存放首地址，这里可以看出，我们是从最后一个对象
 开始分配的即avail对应的空闲对象是最热的，即最近释放出来的，更有可能驻留在CPU高速缓存中。
 */
+
+// 假如avail 是120，表明entry 有120个数据的数据，也就是120个obj，当取用的时候是首先取用entry[120]
+// 然后是entry[119]，这样倒着取用的
 struct array_cache {
-	unsigned int avail;  // 缓冲池中可以用的对象的数目
+	unsigned int avail;  // 缓冲池中可以用的对象的数目，同时也是可以用做entry数组的下标
 	unsigned int limit;  // 这里两个跟kmem_cache数据结构中一样
 	unsigned int batchcount;
 	unsigned int touched; // 从缓冲池中移除一个对象置1，收缩时候置0
@@ -447,6 +450,7 @@ static inline struct kmem_cache *virt_to_cache(const void *obj)
 static inline void *index_to_obj(struct kmem_cache *cache, struct page *page,
 				 unsigned int idx)
 {
+	//cache->size = 24
 	return page->s_mem + cache->size * idx;
 }
 
@@ -793,7 +797,7 @@ static inline void *ac_get_obj(struct kmem_cache *cachep,
 	if (unlikely(sk_memalloc_socks()))
 		objp = __ac_get_obj(cachep, ac, flags, force_refill);
 	else
-		objp = ac->entry[--ac->avail];// 获取对象，对象是数组指针？
+		objp = ac->entry[--ac->avail];// 获取对象，对象是数组指针，从最后一个也就是第16个开始分配
 
 	return objp;
 }
@@ -815,9 +819,9 @@ static inline void ac_put_obj(struct kmem_cache *cachep, struct array_cache *ac,
 								void *objp)
 {
 	if (unlikely(sk_memalloc_socks()))
-		objp = __ac_put_obj(cachep, ac, objp);
+		objp = __ac_put_obj(cachep, ac, objp);  // 这里没跑
 
-	ac->entry[ac->avail++] = objp;
+	ac->entry[ac->avail++] = objp;// 在每个entry放入obj的地址，并且avail 不停的增加。
 }
 
 /*
@@ -830,7 +834,7 @@ static int transfer_objects(struct array_cache *to,
 		struct array_cache *from, unsigned int max)
 {
 	/* Figure out how many entries to transfer */
-	int nr = min3(from->avail, max, to->limit - to->avail);
+	int nr = min3(from->avail, max, to->limit - to->avail); // 这算出来是0
 
 	if (!nr)
 		return 0;
@@ -1619,7 +1623,7 @@ static struct page *kmem_getpages(struct kmem_cache *cachep, gfp_t flags,
 	else
 		add_zone_page_state(page_zone(page),
 			NR_SLAB_UNRECLAIMABLE, nr_pages);
-	__SetPageSlab(page);
+	__SetPageSlab(page);   //在page-flags.h中定义
 	if (page->pfmemalloc)
 		SetPageSlabPfmemalloc(page);
 
@@ -2283,7 +2287,7 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 	if (cachep->colour_off < cachep->align)
 		cachep->colour_off = cachep->align;
 	cachep->colour = left_over / cachep->colour_off;//0
-	cachep->freelist_size = freelist_size;//168
+	cachep->freelist_size = freelist_size;//168,,每个对象需要一个字节来存放freelist，再对齐，所以需要168个
 	cachep->flags = flags;//0
 	cachep->allocflags = __GFP_COMP;//Hex:0x4000
 	if (CONFIG_ZONE_DMA_FLAG && (flags & SLAB_CACHE_DMA))
@@ -2484,7 +2488,7 @@ static void *alloc_slabmgmt(struct kmem_cache *cachep,
 	void *freelist;
 	void *addr = page_address(page);
 
-	/*如果slab管理区位于slab外，则在指定的slabp_cache中分配空间*/  
+	/*如果slab管理区位于slab外，则在指定的slabp_cache中分配空间*/   // 这里没跑  
 	if (OFF_SLAB(cachep)) {
 		/* Slab management obj is off-slab. */
 		freelist = kmem_cache_alloc_node(cachep->freelist_cache,
@@ -2492,7 +2496,8 @@ static void *alloc_slabmgmt(struct kmem_cache *cachep,
 		if (!freelist)
 			return NULL;
 	} else {/*slab管理区处于slab中*/  /*slab管理区从slab首部偏移颜色值的地方开始*/  
-		freelist = addr + colour_off;
+		// 跑的这里
+		freelist = addr + colour_off;     // offset在这里起的作用，freelist 指向freelist的头，跳过了colour
 		colour_off += cachep->freelist_size;
 	}
 	page->active = 0;
@@ -2508,7 +2513,7 @@ static inline freelist_idx_t get_free_obj(struct page *page, unsigned int idx)
 static inline void set_free_obj(struct page *page,
 					unsigned int idx, freelist_idx_t val)
 {
-	((freelist_idx_t *)(page->freelist))[idx] = val;
+	((freelist_idx_t *)(page->freelist))[idx] = val;  // 也就是在page->freelist 这里，0位置就写0,1位置就写1
 }
 
 static void cache_init_objs(struct kmem_cache *cachep,
@@ -2516,6 +2521,7 @@ static void cache_init_objs(struct kmem_cache *cachep,
 {
 	int i;
 
+	// 这里是163
 	for (i = 0; i < cachep->num; i++) {
 		/*得到第i个对象*/  
 		void *objp = index_to_obj(cachep, page, i);
@@ -2554,7 +2560,7 @@ static void cache_init_objs(struct kmem_cache *cachep,
 		if (cachep->ctor)
 			cachep->ctor(objp);
 #endif
-		set_obj_status(page, i, OBJECT_FREE);
+		set_obj_status(page, i, OBJECT_FREE); // 应该是空
 		set_free_obj(page, i, i);
 	}
 }
@@ -2574,8 +2580,9 @@ static void *slab_get_obj(struct kmem_cache *cachep, struct page *page,
 {
 	void *objp;
 
+//第一次进来的时候page->active 是0，
 	objp = index_to_obj(cachep, page, get_free_obj(page, page->active));
-	page->active++;
+	page->active++; // active 来表示数组的下标,表示活跃对象的计数
 #if DEBUG
 	WARN_ON(page_to_nid(virt_to_page(objp)) != nodeid);
 #endif
@@ -2614,8 +2621,8 @@ static void slab_put_obj(struct kmem_cache *cachep, struct page *page,
 static void slab_map_pages(struct kmem_cache *cache, struct page *page,
 			   void *freelist)
 {
-	page->slab_cache = cache;
-	page->freelist = freelist;
+	page->slab_cache = cache;   // 指向cache描述符，按书上说在一个slab中，第一个page页面的slab_cache 指向kmem_cache结构
+	page->freelist = freelist;		// 指向实际freelist所在位置
 }
 
 /*
@@ -2687,7 +2694,7 @@ static int cache_grow(struct kmem_cache *cachep,
 	slab_map_pages(cachep, page, freelist);
 
 	 /*初始化对象*/  
-	cache_init_objs(cachep, page);
+	cache_init_objs(cachep, page);// 其实主要就是写freelist，位置0写0，位置1写1,2写2
 
 	if (local_flags & __GFP_WAIT)
 		local_irq_disable();
@@ -2698,7 +2705,7 @@ static int cache_grow(struct kmem_cache *cachep,
 	 /*将新创建的slab添加到free链表*/  
 	list_add_tail(&page->lru, &(n->slabs_free));
 	STATS_INC_GROWN(cachep);
-	n->free_objects += cachep->num;
+	n->free_objects += cachep->num; // 163个free
 	spin_unlock(&n->list_lock);
 	return 1;
 opps1:
@@ -2808,14 +2815,14 @@ static void *cache_alloc_refill(struct kmem_cache *cachep, gfp_t flags,
 		goto force_grow;
 retry:
 	ac = cpu_cache_get(cachep); //获取本地缓冲池ac
-	batchcount = ac->batchcount;
+	batchcount = ac->batchcount;//60
 	if (!ac->touched && batchcount > BATCHREFILL_LIMIT) {
 		/*
 		 * If there was little recent activity on this cache, then
 		 * perform only a partial refill.  Otherwise we could generate
 		 * refill bouncing.
 		 */
-		batchcount = BATCHREFILL_LIMIT;
+		batchcount = BATCHREFILL_LIMIT;// 进到这里了  16
 	}
 	n = get_node(cachep, node);// 获取salb节点n
 
@@ -2824,22 +2831,24 @@ retry:
 
 	/* See if we can refill from the shared array *///
 	//首先判断共享对象缓冲池中有没有空闲的对象。如果有，就迁移batchcount个空闲对象
-	// 到本地对象缓冲池中
+	// 到本地对象缓冲池中，第一次没有
 	if (n->shared && transfer_objects(ac, n->shared, batchcount)) {
 		n->shared->touched = 1;
 		goto alloc_done;
 	}
 
+	// 第一次batchcount = 16
 	while (batchcount > 0) {
 		struct list_head *entry;
 		struct page *page;
 		/* Get slab alloc is to come from. */
+	// 这里逻辑还没看懂，是不是自己指向自己就表示空
 		entry = n->slabs_partial.next;
 		if (entry == &n->slabs_partial) {
 			n->free_touched = 1;
 			entry = n->slabs_free.next;
 			if (entry == &n->slabs_free)
-				goto must_grow;
+				goto must_grow; //如果slabs_partial/slabs_free都为空，则跳到must_grow分配对象。
 		}
 
 		page = list_entry(entry, struct page, lru);
@@ -2852,8 +2861,9 @@ retry:
 		 */
 		BUG_ON(page->active >= cachep->num);
 
+		// retry再第一次进来page->active 是0
 		while (page->active < cachep->num && batchcount--) {
-			STATS_INC_ALLOCED(cachep);
+			STATS_INC_ALLOCED(cachep);  // 好像都是空
 			STATS_INC_ACTIVE(cachep);
 			STATS_SET_HIGH(cachep);
 
@@ -2863,24 +2873,25 @@ retry:
 
 		/* move slabp to correct slabp list: */
 		list_del(&page->lru);
-		if (page->active == cachep->num)
+		if (page->active == cachep->num)   // 如果163个都用了，那就放到full链表
 			list_add(&page->lru, &n->slabs_full);
 		else
-			list_add(&page->lru, &n->slabs_partial);
+			list_add(&page->lru, &n->slabs_partial);// 否则放到部分链表
 	}
 
 //  真正第一次分配
 must_grow:
-	n->free_objects -= ac->avail;
+	n->free_objects -= ac->avail;  // 第一次进来都是0，再次进来变成163 -16
 alloc_done:
 	spin_unlock(&n->list_lock);
-
+	// 第二次走到这里的时候ac->avail 已经是16了，表示有了16个obj
 	if (unlikely(!ac->avail)) {
 		int x;
 force_grow:
 		x = cache_grow(cachep, flags | GFP_THISNODE, node, NULL);
 
 		/* cache_grow can reenable interrupts, then ac could change. */
+		// 因为是每cpu变量，这个ac可能在这可能发生中断，所以要重新获取
 		ac = cpu_cache_get(cachep);
 		node = numa_mem_id();
 
@@ -2888,7 +2899,7 @@ force_grow:
 		if (!x && (ac->avail == 0 || force_refill))
 			return NULL;
 
-		if (!ac->avail)		/* objects refilled by interrupt? */
+		if (!ac->avail)		/* objects refilled by interrupt? */  // 缓冲池中没有数据，所以要重新获取
 			goto retry;
 	}
 	ac->touched = 1;
@@ -2974,6 +2985,7 @@ static inline void *____cache_alloc(struct kmem_cache *cachep, gfp_t flags)
 
 	check_irq_off();
 
+	// 获得当前cpu的array_cache
 	ac = cpu_cache_get(cachep);
 	if (likely(ac->avail)) {
 		ac->touched = 1;
@@ -3264,6 +3276,7 @@ __do_cache_alloc(struct kmem_cache *cache, gfp_t flags)
 }
 #else
 
+// 走的这里
 static __always_inline void *
 __do_cache_alloc(struct kmem_cache *cachep, gfp_t flags)
 {
@@ -3285,7 +3298,7 @@ slab_alloc(struct kmem_cache *cachep, gfp_t flags, unsigned long caller)
 	if (slab_should_failslab(cachep, flags))
 		return NULL;
 
-	cachep = memcg_kmem_get_cache(cachep, flags);
+	cachep = memcg_kmem_get_cache(cachep, flags);// 可以看下这个地址跟刚才分配出来的地址是否一致
 
 	cache_alloc_debugcheck_before(cachep, flags);
 	local_irq_save(save_flags);
@@ -3355,6 +3368,7 @@ static void cache_flusharray(struct kmem_cache *cachep, struct array_cache *ac)
 	int node = numa_mem_id();
 	LIST_HEAD(list);
 
+// 在我们的例子中，ac->limit为120，ac->batchcount 为60
 	batchcount = ac->batchcount;
 #if DEBUG
 	BUG_ON(!batchcount || batchcount > ac->avail);
@@ -3362,14 +3376,16 @@ static void cache_flusharray(struct kmem_cache *cachep, struct array_cache *ac)
 	check_irq_off();
 	n = get_node(cachep, node);
 	spin_lock(&n->list_lock);
-	if (n->shared) {
+	if (n->shared) {// 首先判断是否有共享对象的缓冲池，如果有，则会把本地对象缓冲池中的空闲对象复制到
+	//共享对象缓冲池
 		struct array_cache *shared_array = n->shared;
 		int max = shared_array->limit - shared_array->avail;
 		if (max) {
 			if (batchcount > max)
 				batchcount = max;
 			memcpy(&(shared_array->entry[shared_array->avail]),
-			       ac->entry, sizeof(void *) * batchcount);
+			       ac->entry, sizeof(void *) * batchcount); // 把这些空闲的地址也就是ac->entry 复制到shared_array->entry，
+			       // 留意这里的移动是从ac->entry 也就是buffer的头部开始复制的
 			shared_array->avail += batchcount;
 			goto free_done;
 		}
@@ -3398,6 +3414,7 @@ free_done:
 	spin_unlock(&n->list_lock);
 	slabs_destroy(cachep, &list);
 	ac->avail -= batchcount;
+	// 本地对象缓冲池剩余的空闲对象前移到buffer的头部
 	memmove(ac->entry, &(ac->entry[batchcount]), sizeof(void *)*ac->avail);
 }
 
@@ -3428,7 +3445,7 @@ static inline void __cache_free(struct kmem_cache *cachep, void *objp,
 
 	if (ac->avail < ac->limit) {
 		STATS_INC_FREEHIT(cachep);
-	} else {
+	} else {// 当本地对象缓冲池中的空闲对象大于ac->limit的时候,需要去尝试回收空闲对象
 		STATS_INC_FREEMISS(cachep);
 		cache_flusharray(cachep, ac);
 	}
@@ -3584,7 +3601,7 @@ EXPORT_SYMBOL(__kmalloc_track_caller);
 void kmem_cache_free(struct kmem_cache *cachep, void *objp)
 {
 	unsigned long flags;
-	cachep = cache_from_obj(cachep, objp);
+	cachep = cache_from_obj(cachep, objp);// 通过要释放的对象的虚拟地址找到对应的kmem_cache
 	if (!cachep)
 		return;
 
@@ -3701,7 +3718,7 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 		kmem_cache_node_init(n);
 		n->next_reap = jiffies + REAPTIMEOUT_NODE +
 				((unsigned long)cachep) % REAPTIMEOUT_NODE;
-		n->shared = new_shared;// 分配的那8*60个共享的obj
+		n->shared = new_shared;// 分配的那8*60个共享的obj，都挂在这里
 		n->alien = new_alien;
 
 		// 283 = 2 * 60 + 163

@@ -586,6 +586,7 @@ static inline void memcg_put_cache_ids(void)
 {
 }
 
+// 调用的是这里
 static inline struct kmem_cache *
 memcg_kmem_get_cache(struct kmem_cache *cachep, gfp_t gfp)
 {

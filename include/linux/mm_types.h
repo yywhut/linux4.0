@@ -87,7 +87,7 @@ struct page {
 	struct {
 		union {
 			pgoff_t index;		/* Our offset within mapping. */
-			void *freelist;		/* sl[aou]b first free object */
+			void *freelist;		/* sl[aou]b first free object */ // 指向第一个freelist的地址
 			bool pfmemalloc;	/* If set by the page allocator,
 						 * ALLOC_NO_WATERMARKS was set
 						 * and the low watermark was not
@@ -143,7 +143,7 @@ struct page {
 				};
 				atomic_t _count;		/* Usage count, see below. */ //页引用计数器
 			};
-			unsigned int active;	/* SLAB */
+			unsigned int active;	/* SLAB */  // 作为下标，来指向可用的obj， active 来表示数组的下标,同时也表示活跃对象的计数，当这个计数为0的时候可以销毁这个slab
 		};
 	};
 
@@ -202,7 +202,9 @@ struct page {
 		spinlock_t ptl;
 #endif
 #endif
-		struct kmem_cache *slab_cache;	/* SL[AU]B: Pointer to slab */
+		// 针对slab或者slub分配的时候，在一个slab中 如果这个page是第一个page，则用slab_cache 指向slab_cache结构
+		//如果这个page不是第一个page，则用first_page 来指向第一个page结构，这里挺有意思
+		struct kmem_cache *slab_cache;	/* SL[AU]B: Pointer to slab *///第一个page页面的slab_cache 指向kmem_cache结构
 		struct page *first_page;	/* Compound tail pages */
 	};
 
