@@ -328,10 +328,10 @@ do_kmem_cache_create(const char *name, size_t object_size, size_t size,
 		goto out;
 
 	s->name = name;
-	s->object_size = object_size;
-	s->size = size;
-	s->align = align;
-	s->ctor = ctor;
+	s->object_size = object_size; //20
+	s->size = size;  //20
+	s->align = align;//8
+	s->ctor = ctor;//空
 
 	err = init_memcg_params(s, memcg, root_cache);
 	if (err)
@@ -383,7 +383,7 @@ out_free_cache:
 
 /*
 
-name：kmem_cache的名称
+	name：kmem_cache的名称
     size ：slab管理对象的大小
 
     align：slab分配器分配内存的对齐字节数(以align字节对齐)

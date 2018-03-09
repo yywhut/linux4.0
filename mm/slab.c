@@ -201,7 +201,7 @@ struct array_cache {
 	unsigned int limit;  // 这里两个跟kmem_cache数据结构中一样
 	unsigned int batchcount;
 	unsigned int touched; // 从缓冲池中移除一个对象置1，收缩时候置0
-	void *entry[];	/*  // 保存对象的实体               例子中这里是分配了120个 指针
+	void *entry[];	/*  // 保存对象的实体               例子中这里是分配了120个 指针,保存的都是obj的指针地址
 			 * Must have this definition in here for the proper
 			 * alignment of array_cache. Also simplifies accessing
 			 * the entries.
@@ -521,7 +521,7 @@ static int calculate_nr_objs(size_t slab_size, size_t buffer_size,
 	 * into account.
 	 */
 	 //163
-	 //4096/ (24+1)
+	 //4096/ (24+1)    idx_size 是一个字节，也就是一个obj需要配上一个idx，所以是24+1
 	nr_objs = slab_size / (buffer_size + idx_size + extra_space);
 
 	/*
@@ -834,7 +834,7 @@ static int transfer_objects(struct array_cache *to,
 		struct array_cache *from, unsigned int max)
 {
 	/* Figure out how many entries to transfer */
-	int nr = min3(from->avail, max, to->limit - to->avail); // 这算出来是0
+	int nr = min3(from->avail, max, to->limit - to->avail); // retry之后再次进来这算出来是0
 
 	if (!nr)
 		return 0;
@@ -2251,6 +2251,7 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 	if (FREELIST_BYTE_INDEX && size < SLAB_OBJ_MIN_SIZE)
 		size = ALIGN(SLAB_OBJ_MIN_SIZE, cachep->align);
 
+	// 计算slab的order 以及包含几个obj，
 	left_over = calculate_slab_order(cachep, size, cachep->align, flags);
 //left_over = 16
 	if (!cachep->num)
@@ -2307,6 +2308,7 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 		BUG_ON(ZERO_OR_NULL_PTR(cachep->freelist_cache));
 	}
 
+	// 这里 也很重要，建立cpu的 cache
 	err = setup_cpu_cache(cachep, gfp);
 	if (err) {
 		__kmem_cache_shutdown(cachep);
@@ -2653,13 +2655,13 @@ static int cache_grow(struct kmem_cache *cachep,
 	spin_lock(&n->list_lock);
 
 	/* Get colour for the slab, and cal the next value. */
-	offset = n->colour_next;
+	offset = n->colour_next;// 这里是0
 	n->colour_next++;
 	if (n->colour_next >= cachep->colour)
 		n->colour_next = 0;
 	spin_unlock(&n->list_lock);
 
-	offset *= cachep->colour_off;
+	offset *= cachep->colour_off; // 这里也是0，如果是1 就可以成一个数字了
 
 	if (local_flags & __GFP_WAIT)
 		local_irq_enable();
@@ -2850,7 +2852,8 @@ retry:
 			if (entry == &n->slabs_free)
 				goto must_grow; //如果slabs_partial/slabs_free都为空，则跳到must_grow分配对象。
 		}
-
+		
+		//根据slabs_free链表上lur结构找到对应的page结构
 		page = list_entry(entry, struct page, lru);
 		check_spinlock_acquired(cachep);
 
@@ -2861,7 +2864,7 @@ retry:
 		 */
 		BUG_ON(page->active >= cachep->num);
 
-		// retry再第一次进来page->active 是0
+		// retry再第一次进来page->active 是0，cachep->num 是163，batchcount 是16，也就是要摘16个obj出来
 		while (page->active < cachep->num && batchcount--) {
 			STATS_INC_ALLOCED(cachep);  // 好像都是空
 			STATS_INC_ACTIVE(cachep);
@@ -2872,7 +2875,7 @@ retry:
 		}
 
 		/* move slabp to correct slabp list: */
-		list_del(&page->lru);
+		list_del(&page->lru);// 从free链表中删除
 		if (page->active == cachep->num)   // 如果163个都用了，那就放到full链表
 			list_add(&page->lru, &n->slabs_full);
 		else
@@ -3669,7 +3672,8 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 		//cachep->shared = 8
 		if (cachep->shared) {
 			//分配共享对象缓冲池 为多核cpu之间共享空闲缓存对象
-			// 分配了 8 * 60 个 obj
+			// 分配了 8 * 60 个 obj 的entry，注意这里只是分配entry还没分配obj
+			// 一个struct array_cache 头以及480个对象
 			new_shared = alloc_arraycache(node,
 				cachep->shared*cachep->batchcount,
 					0xbaadf00d, gfp);
@@ -3721,7 +3725,7 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 		n->shared = new_shared;// 分配的那8*60个共享的obj，都挂在这里
 		n->alien = new_alien;
 
-		// 283 = 2 * 60 + 163
+		// 283 = 2 * 60 + 163  这里是为什么
 		n->free_limit = (1 + nr_cpus_node(node)) *
 					cachep->batchcount + cachep->num;
 		// 赋值kmem_cache_node

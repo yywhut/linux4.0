@@ -349,7 +349,7 @@ struct kmem_cache_node {
 	struct list_head slabs_partial;	/* partial list first, better asm code */
 	struct list_head slabs_full;
 	struct list_head slabs_free;
-	unsigned long free_objects;  //上述三个链表中空闲对象的综合
+	unsigned long free_objects;  //上述三个链表中空闲对象的综合，每摘除一些到 cache中，这个值就减小
 	unsigned int free_limit;  // 所有slab上容许空闲对象的最大数目
 	unsigned int colour_next;	/* Per-node cache coloring */ // 从0开始++
 	struct array_cache *shared;	/* shared per node */
