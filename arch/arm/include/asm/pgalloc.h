@@ -128,10 +128,22 @@ static inline void pte_free(struct mm_struct *mm, pgtable_t pte)
 	__free_page(pte);
 }
 
+	/*
+在执行这个函数之前，2个L2页表已经建立，该函数的作用就是设置L1页表的对应表项，使其指向刚建立的2个L2
+页表（hwpte0，hwpte1），正如前面所说，由于linux的L1页表项是8个字节大小，所以：
+
+line133 将头4个字节指向hwpte0页表，
+
+line135 将后4个字节指向hwpte1页表，至此L1---〉L2页表的关联已经建立。
+注意那个4k的分配的 二级页表的page，前面1k是 linux用的 256个条目，每个条目4个字节的二级页表，
+第二个1k也是linux用的，第三个1k是 mmu用的，第四个也是mmu用到的，是硬件用到的
+注意这里是加了PTE_HWTABLE_OFF，所以实际上写的是后面 mmu用的到地方，也就是hw的
+	*/
+
 static inline void __pmd_populate(pmd_t *pmdp, phys_addr_t pte,
 				  pmdval_t prot)
 {
-	pmdval_t pmdval = (pte + PTE_HWTABLE_OFF) | prot;
+	pmdval_t pmdval = (pte + PTE_HWTABLE_OFF) | prot;  // 跳2k 指向4k中的后面两k
 	pmdp[0] = __pmd(pmdval);
 #ifndef CONFIG_ARM_LPAE
 	pmdp[1] = __pmd(pmdval + 256 * sizeof(pte_t));

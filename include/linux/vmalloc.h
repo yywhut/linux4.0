@@ -29,16 +29,18 @@ struct vm_area_struct;		/* vma defining user mapping in mm_types.h */
 #endif
 
 struct vm_struct {
-	struct vm_struct	*next;
-	void			*addr;
+	struct vm_struct	*next;  //所有的vm_struct通过next链接
+	void			*addr;  //addr为该区间的地址地址，也就是所在的vmalloc区间地址，虚拟地址 size为该区间的大小，
 	unsigned long		size;
 	unsigned long		flags;
-	struct page		**pages;
-	unsigned int		nr_pages;
+	struct page		**pages;  //page是一个page指针数组，记录该区间映射的所有物理页面，本身需要分配内存
+	unsigned int		nr_pages;  //nr_pages记录该区间包含的页面数量，
 	phys_addr_t		phys_addr;
-	const void		*caller;
+	const void		*caller; // caller是一个函数指针__builtin_return_address(0)，这个玩意暂时不太了解
 };
 
+
+//管理vmap_area结构的红黑树根节点为全局变量vmap_area_root，双链表头结点为vmap_area_list。
 struct vmap_area {
 	unsigned long va_start;
 	unsigned long va_end;

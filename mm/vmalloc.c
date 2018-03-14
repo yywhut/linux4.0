@@ -118,12 +118,12 @@ static int vmap_pte_range(pmd_t *pmd, unsigned long addr,
 	 * nr is a running index into the array which helps higher level
 	 * callers keep track of where we're up to.
 	 */
-
+//pmd:0xc0007c08   addr:0xf0298000  end:0xf0299000
 	pte = pte_alloc_kernel(pmd, addr);
 	if (!pte)
 		return -ENOMEM;
 	do {
-		struct page *page = pages[*nr];
+		struct page *page = pages[*nr];  // nr中的数据是0，应该用来指示哪个page，page不停的增加
 
 		if (WARN_ON(!pte_none(*pte)))
 			return -EBUSY;
@@ -135,6 +135,8 @@ static int vmap_pte_range(pmd_t *pmd, unsigned long addr,
 	return 0;
 }
 
+
+////该两个函数实际没做任何事，因为ARM920T只支持2级映射
 static int vmap_pmd_range(pud_t *pud, unsigned long addr,
 		unsigned long end, pgprot_t prot, struct page **pages, int *nr)
 {
@@ -146,23 +148,24 @@ static int vmap_pmd_range(pud_t *pud, unsigned long addr,
 		return -ENOMEM;
 	do {
 		next = pmd_addr_end(addr, end);
-		if (vmap_pte_range(pmd, addr, next, prot, pages, nr))
+		if (vmap_pte_range(pmd, addr, next, prot, pages, nr))  // 实际只有这里有用
 			return -ENOMEM;
 	} while (pmd++, addr = next, addr != end);
 	return 0;
 }
 
+////该两个函数实际没做任何事，因为ARM920T只支持2级映射
 static int vmap_pud_range(pgd_t *pgd, unsigned long addr,
 		unsigned long end, pgprot_t prot, struct page **pages, int *nr)
 {
 	pud_t *pud;
 	unsigned long next;
 
-	pud = pud_alloc(&init_mm, pgd, addr);
+	pud = pud_alloc(&init_mm, pgd, addr);  //0xc0007c08
 	if (!pud)
 		return -ENOMEM;
 	do {
-		next = pud_addr_end(addr, end);
+		next = pud_addr_end(addr, end);  //0xf0299000
 		if (vmap_pmd_range(pud, addr, next, prot, pages, nr))
 			return -ENOMEM;
 	} while (pud++, addr = next, addr != end);
@@ -172,7 +175,7 @@ static int vmap_pud_range(pgd_t *pgd, unsigned long addr,
 /*
  * Set up page tables in kva (addr, end). The ptes shall have prot "prot", and
  * will have pfns corresponding to the "pages" array.
- *
+ *kmem_cache_zalloc
  * Ie. pte at addr+N*PAGE_SIZE shall point to pfn corresponding to pages[N]
  */
 static int vmap_page_range_noflush(unsigned long start, unsigned long end,
@@ -180,14 +183,15 @@ static int vmap_page_range_noflush(unsigned long start, unsigned long end,
 {
 	pgd_t *pgd;
 	unsigned long next;
-	unsigned long addr = start;
+	unsigned long addr = start;//0xf0298000
 	int err = 0;
 	int nr = 0;
 
 	BUG_ON(addr >= end);
-	pgd = pgd_offset_k(addr);
+	pgd = pgd_offset_k(addr);//0xc0007c08，addr 所对应的一级页表的虚拟地址
 	do {
-		next = pgd_addr_end(addr, end);
+		//next为当前页表项所映射的内存区的终止地址
+		next = pgd_addr_end(addr, end);//0xf0299000
 		err = vmap_pud_range(pgd, addr, next, prot, pages, &nr);
 		if (err)
 			return err;
@@ -196,6 +200,8 @@ static int vmap_page_range_noflush(unsigned long start, unsigned long end,
 	return nr;
 }
 
+
+// start 虚拟地址起始，end 虚拟地址结束，pages要映射到的物理内存page
 static int vmap_page_range(unsigned long start, unsigned long end,
 			   pgprot_t prot, struct page **pages)
 {
@@ -303,6 +309,7 @@ static struct vmap_area *__find_vmap_area(unsigned long addr)
 	return NULL;
 }
 
+/* 将分配的vmap_area插入到红黑树中，代表这一段地址空间已经从KVA中分配出去了 */
 static void __insert_vmap_area(struct vmap_area *va)
 {
 	struct rb_node **p = &vmap_area_root.rb_node;
@@ -314,6 +321,9 @@ static void __insert_vmap_area(struct vmap_area *va)
 
 		parent = *p;
 		tmp_va = rb_entry(parent, struct vmap_area, rb_node);
+		//tmp_va 是已经挂好的叶子，例如从0xf0000000 到0xf0002000
+		//va->va_start = 0xf0004000 到0xf0006000第一次走的p = &(*p)->rb_right
+		// 右边的节点就是例如v从0xf0002000 到0xf0004000，第二次还是走右边节点，然后就被挂在右边了
 		if (va->va_start < tmp_va->va_end)
 			p = &(*p)->rb_left;
 		else if (va->va_end > tmp_va->va_start)
@@ -326,13 +336,13 @@ static void __insert_vmap_area(struct vmap_area *va)
 	rb_insert_color(&va->rb_node, &vmap_area_root);
 
 	/* address-sort this list */
-	tmp = rb_prev(&va->rb_node);
+	tmp = rb_prev(&va->rb_node);// 我猜想是用来判断是否是头节点
 	if (tmp) {
 		struct vmap_area *prev;
 		prev = rb_entry(tmp, struct vmap_area, rb_node);
 		list_add_rcu(&va->list, &prev->list);
 	} else
-		list_add_rcu(&va->list, &vmap_area_list);
+		list_add_rcu(&va->list, &vmap_area_list);// 第一个插在这里，后面的就插在上面
 }
 
 static void purge_vmap_area_lazy(void);
@@ -341,6 +351,7 @@ static void purge_vmap_area_lazy(void);
  * Allocate a region of KVA of the specified size and alignment, within the
  * vstart and vend.
  */
+ //这个函数在整个vmalloc空间查找一个大小合适并没有使用的空间，vstart = VMALLOC_START VEND = vmalloc_end
 static struct vmap_area *alloc_vmap_area(unsigned long size,
 				unsigned long align,
 				unsigned long vstart, unsigned long vend,
@@ -378,6 +389,13 @@ retry:
 	 * Note that __free_vmap_area may update free_vmap_cache
 	 * without updating cached_hole_size or cached_align.
 	 */
+
+	/*
+	如果free_vmap_cache为空，或者在free_vmap_cache存在size大于请求分配空间的大小，
+	又或者请求分配的起始地址小于cached_vstart，或者要求的对齐大小小于cached_align，
+	则就不利用cache，这时设置cached_hole_size=0，free_vmap_cache=NULL，
+	然后更新cached_vstart和cached_align
+	*/
 	if (!free_vmap_cache ||
 			size < cached_hole_size ||
 			vstart < cached_vstart ||
@@ -390,16 +408,33 @@ nocache:
 	cached_vstart = vstart;
 	cached_align = align;
 
+	//从代码来看free_vmap_cache是上次分配出去的vmap_area的红黑树节点，
+	//而cached_hole_size是free_vmap_cache最大的空洞
+	
 	/* find starting point for our search */
 	if (free_vmap_cache) {
 		first = rb_entry(free_vmap_cache, struct vmap_area, rb_node);
-		addr = ALIGN(first->va_end, align);
-		if (addr < vstart)
+		addr = ALIGN(first->va_end, align);//找到这个小区间的结束地址
+		if (addr < vstart) //结束地址都比开始地址小，那肯定不能用 
 			goto nocache;
-		if (addr + size < addr)
+		if (addr + size < addr)  //地址越界
 			goto overflow;
 
-	} else {
+	} else {  // 从这里是开始查找
+
+	/*
+	如果free_vmap_cache不存在，则从vstart设置对齐后的地址为起始地址开始遍历红黑树，
+	有可能得到两种结果1、找到一个vmap_area，其代表区间的结束地址要大于等于vstart并且起始地址小于等于vstart，
+	就找到了first节点。2、vstart地址大于红黑树中所有节点的结束地址，起始就是vstart在已经分配的最大的地址后面，
+	那这样就不用遍历了，直接满足条件。
+
+	如果是第一种情况，则需要从first节点往后遍历，这个过程会更新cached_hole_size，从代码看是一直遍历到链表最后，如果剩余的空间足够分配，则成功，否则失败。不太明白的是从头开始遍历并没有想到利用最大空洞，而是总是遍历到最后，这点着实不解。
+
+找到之后就设置vmap_area的相关记录信息，并调用__insert_vmap_area插入到红黑树和链表中。
+
+ 
+
+	*/
 		addr = ALIGN(vstart, align);
 		if (addr + size < addr)
 			goto overflow;
@@ -407,44 +442,52 @@ nocache:
 		n = vmap_area_root.rb_node;
 		first = NULL;
 
+		// 返回起始地址最小的vmalloc区块
 		while (n) {
 			struct vmap_area *tmp;
 			tmp = rb_entry(n, struct vmap_area, rb_node);
-			if (tmp->va_end >= addr) {
+			if (tmp->va_end >= addr) {//找到一个结束地址大于需要映射的开始地址
 				first = tmp;
-				if (tmp->va_start <= addr)
+				if (tmp->va_start <= addr)//这里就表明，起始地址在区域中间
 					break;
-				n = n->rb_left;
+				n = n->rb_left;;//这里往叶子节点走，则分配地址更小的区域
 			} else
-				n = n->rb_right;
+				n = n->rb_right;;//这边分配，则分配地址更大的区域
 		}
 
-		if (!first)
+		// 没有一个节点
+		if (!first)//表示找到了起始地址，映射起始地址比任何区域的结束地址都大
 			goto found;
 	}
 
 	/* from the starting point, walk areas until a suitable hole is found */
-	while (addr + size > first->va_start && addr + size <= vend) {
+	//0xf0000000 + 0x2000 > 0xf0000000  && 0xf0000000 + 0x2000 <= 0xff000000
+	while (addr + size > first->va_start && addr + size <= vend) {//这里是计算空洞地址是否足够
+		//cached_hole_size 运行的时候是0
 		if (addr + cached_hole_size < first->va_start)
 			cached_hole_size = first->va_start - addr;
-		addr = ALIGN(first->va_end, align);
+		addr = ALIGN(first->va_end, align);//重点是addr每次都会移动到区域结尾处
+		//addr = 0xf0002000
 		if (addr + size < addr)
 			goto overflow;
 
-		if (list_is_last(&first->list, &vmap_area_list))
+		if (list_is_last(&first->list, &vmap_area_list))//如果是最后一个区域，那接下来的都是空洞地址
 			goto found;
 
+		//找到下一个vmap_area,
 		first = list_entry(first->list.next,
 				struct vmap_area, list);
 	}
 
 found:
-	if (addr + size > vend)
+	if (addr + size > vend)//看看是否超出vmalloc_end的界限
 		goto overflow;
 
 	va->va_start = addr;
 	va->va_end = addr + size;
 	va->flags = 0;
+
+	 /* 将分配的vmap_area插入到红黑树中，代表这一段地址空间已经从KVA中分配出去了 */
 	__insert_vmap_area(va);
 	free_vmap_cache = &va->rb_node;
 	spin_unlock(&vmap_area_lock);
@@ -1269,10 +1312,12 @@ void unmap_kernel_range(unsigned long addr, unsigned long size)
 }
 EXPORT_SYMBOL_GPL(unmap_kernel_range);
 
+
+// 进行虚拟地址到实际内存page的映射
 int map_vm_area(struct vm_struct *area, pgprot_t prot, struct page **pages)
 {
-	unsigned long addr = (unsigned long)area->addr;
-	unsigned long end = addr + get_vm_area_size(area);
+	unsigned long addr = (unsigned long)area->addr;//0xf0298000
+	unsigned long end = addr + get_vm_area_size(area);//0xf0299000  // 这里只映射了一个page，刚好4086bytes
 	int err;
 
 	err = vmap_page_range(addr, end, prot, pages);
@@ -1312,7 +1357,7 @@ static struct vm_struct *__get_vm_area_node(unsigned long size,
 	struct vmap_area *va;
 	struct vm_struct *area;
 
-	BUG_ON(in_interrupt());
+	BUG_ON(in_interrupt());  // 这句话确保当前不在中断上下文中，因为这个函数可能睡眠
 	if (flags & VM_IOREMAP)
 		align = 1ul << clamp(fls(size), PAGE_SHIFT, IOREMAP_MAX_ORDER);
 
@@ -1320,12 +1365,14 @@ static struct vm_struct *__get_vm_area_node(unsigned long size,
 	if (unlikely(!size))
 		return NULL;
 
+	// 分配一个 vm_struct 数据结构来描述这个vmalloc区域
 	area = kzalloc_node(sizeof(*area), gfp_mask & GFP_RECLAIM_MASK, node);
 	if (unlikely(!area))
 		return NULL;
 
+	// 如果flags中没有定义这个标志，需要增加一个page做安全垫
 	if (!(flags & VM_NO_GUARD))
-		size += PAGE_SIZE;
+		size += PAGE_SIZE;  //程序跑了这里
 
 	va = alloc_vmap_area(size, align, start, end, node, gfp_mask);
 	if (IS_ERR(va)) {
@@ -1563,19 +1610,21 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 	const gfp_t nested_gfp = (gfp_mask & GFP_RECLAIM_MASK) | __GFP_ZERO;
 	const gfp_t alloc_mask = gfp_mask | __GFP_NOWARN;
 
-	nr_pages = get_vm_area_size(area) >> PAGE_SHIFT;
-	array_size = (nr_pages * sizeof(struct page *));
+	nr_pages = get_vm_area_size(area) >> PAGE_SHIFT;//去掉一个空洞页  1
+	array_size = (nr_pages * sizeof(struct page *));//数组大小   =4 
 
-	area->nr_pages = nr_pages;
+	area->nr_pages = nr_pages;;//实际映射的页数
+	
 	/* Please note that the recursion is strictly bounded. */
-	if (array_size > PAGE_SIZE) {
+	// 分配page指针
+	if (array_size > PAGE_SIZE) {  {//如果大于一个page，则使用vmalloc来分配。这里是递归
 		pages = __vmalloc_node(array_size, 1, nested_gfp|__GFP_HIGHMEM,
 				PAGE_KERNEL, node, area->caller);
-		area->flags |= VM_VPAGES;
-	} else {
+		area->flags |= VM_VPAGES;//标识是vmalloc分配的内存
+	} else {  //数组比较小，就用kmalloc来分配，node = -1
 		pages = kmalloc_node(array_size, nested_gfp, node);
 	}
-	area->pages = pages;
+	area->pages = pages;// page 数据结构指针
 	if (!area->pages) {
 		remove_vm_area(area->addr);
 		kfree(area);
@@ -1585,8 +1634,8 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 	for (i = 0; i < area->nr_pages; i++) {
 		struct page *page;
 
-		if (node == NUMA_NO_NODE)
-			page = alloc_page(alloc_mask);
+		if (node == NUMA_NO_NODE)  // 走的这里
+			page = alloc_page(alloc_mask);  // 分配了实际的内存空间
 		else
 			page = alloc_pages_node(node, alloc_mask, order);
 
@@ -1595,12 +1644,13 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 			area->nr_pages = i;
 			goto fail;
 		}
-		area->pages[i] = page;
+		area->pages[i] = page; // 通过指针数组记录
 		if (gfp_mask & __GFP_WAIT)
 			cond_resched();
 	}
 
-	if (map_vm_area(area, prot, pages))
+	if (map_vm_area(area, prot, pages))//利用页表项来建立映射，刚才分配的内存空间，与之前所分配的虚拟地址也就是
+									// vmalloc的区域进行映射
 		goto fail;
 	return area->addr;
 
@@ -1638,9 +1688,12 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 	unsigned long real_size = size;
 
 	size = PAGE_ALIGN(size);
+
+	//分配的内存大小不能为0或者不能大于系统的所有的内存
 	if (!size || (size >> PAGE_SHIFT) > totalram_pages)
 		goto fail;
 
+	// 首先要分配区域
 	area = __get_vm_area_node(size, align, VM_ALLOC | VM_UNINITIALIZED |
 				vm_flags, start, end, node, gfp_mask, caller);
 	if (!area)
@@ -1690,6 +1743,8 @@ static void *__vmalloc_node(unsigned long size, unsigned long align,
 			    gfp_t gfp_mask, pgprot_t prot,
 			    int node, const void *caller)
 {
+
+	//0xf0000000  0xff000000
 	return __vmalloc_node_range(size, align, VMALLOC_START, VMALLOC_END,
 				gfp_mask, prot, 0, node, caller);
 }

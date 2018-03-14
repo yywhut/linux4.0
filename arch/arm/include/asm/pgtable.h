@@ -41,6 +41,9 @@
  * The vmalloc() routines leaves a hole of 4kB between each vmalloced
  * area for the same reason. ;)
  */
+
+//  32位是对应的这里
+//high_memory 是在sanity_check_meminfo函数中
 #define VMALLOC_OFFSET		(8*1024*1024)
 #define VMALLOC_START		(((unsigned long)high_memory + VMALLOC_OFFSET) & ~(VMALLOC_OFFSET-1))
 #define VMALLOC_END		0xff000000UL
@@ -185,9 +188,12 @@ extern pgd_t swapper_pg_dir[PTRS_PER_PGD];
 #define pmd_none(pmd)		(!pmd_val(pmd))
 #define pmd_present(pmd)	(pmd_val(pmd))
 
+
+// 将物理地址转化为虚拟地址，返回虚拟地址
+
 static inline pte_t *pmd_page_vaddr(pmd_t pmd)
 {
-	return __va(pmd_val(pmd) & PHYS_MASK & (s32)PAGE_MASK);
+	return __va(pmd_val(pmd) & PHYS_MASK & (s32)PAGE_MASK); // 走的这里
 }
 
 #define pmd_page(pmd)		pfn_to_page(__phys_to_pfn(pmd_val(pmd) & PHYS_MASK))
@@ -202,6 +208,13 @@ static inline pte_t *pmd_page_vaddr(pmd_t pmd)
 
 #define pte_index(addr)		(((addr) >> PAGE_SHIFT) & (PTRS_PER_PTE - 1))
 
+
+
+/**
+ * 在主内核页表中定位内核地址对应的页表的虚拟地址。
+ 首先通过一级页表中的数据  找出二级页表的物理地址，因为是取数据吗*(pmd)
+ 然后把这个物理地址转化成虚拟地址， 然后加上 偏移值，也就是二级页表所在的虚拟地址
+ */
 #define pte_offset_kernel(pmd,addr)	(pmd_page_vaddr(*(pmd)) + pte_index(addr))
 
 #define pte_offset_map(pmd,addr)	(__pte_map(pmd) + pte_index(addr))

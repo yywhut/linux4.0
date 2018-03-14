@@ -872,6 +872,8 @@ static void __init create_36bit_mapping(struct map_desc *md,
  * offsets, and we take full advantage of sections and
  * supersections.
  */
+
+PGDIR_SIZE
 static void __init create_mapping(struct map_desc *md)
 {
 	unsigned long addr, length, end;
@@ -931,7 +933,7 @@ static void __init create_mapping(struct map_desc *md)
 		unsigned long next = pgd_addr_end(addr, end);   //获得下一段开始地址 ,这里一段是2M的空间
 														//Hex:0xc0200000
 
-
+		// 奔跑里说是以PGDIR_SIZE  为步长， 也就是1M
 		//申请并初始化一个段
 
          // 一级页表(段页表)虚拟地址、虚拟起始地址、虚拟结尾地址(要么是addr + 2MB，要么是end)、物理起始地址、内存

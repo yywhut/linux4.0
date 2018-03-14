@@ -75,7 +75,7 @@
 #define PTRS_PER_PGD		2048
 
 #define PTE_HWTABLE_PTRS	(PTRS_PER_PTE)
-#define PTE_HWTABLE_OFF		(PTE_HWTABLE_PTRS * sizeof(pte_t))
+#define PTE_HWTABLE_OFF		(PTE_HWTABLE_PTRS * sizeof(pte_t))  // 512 * 4
 #define PTE_HWTABLE_SIZE	(PTRS_PER_PTE * sizeof(u32))
 
 /*
@@ -85,10 +85,10 @@
 #define PMD_SHIFT		21
 #define PGDIR_SHIFT		21
 
-#define PMD_SIZE		(1UL << PMD_SHIFT)
+#define PMD_SIZE		(1UL << PMD_SHIFT)  //0x100000
 #define PMD_MASK		(~(PMD_SIZE-1))
 #define PGDIR_SIZE		(1UL << PGDIR_SHIFT)
-#define PGDIR_MASK		(~(PGDIR_SIZE-1))
+#define PGDIR_MASK		(~(PGDIR_SIZE-1))  //0xfff00000 
 
 /*
  * section address mask and size definitions.

@@ -600,8 +600,21 @@ int __pte_alloc(struct mm_struct *mm, struct vm_area_struct *vma,
 	return 0;
 }
 
+
+/*
+对于一个虚拟地址，在linux的二级页表看来，会将这个地址做如上划分。
+pgd也就是一级页表，一共有2048个条目，但是每个条目有8个字节，相当于两个小条目，所以一共有4096个小条目，
+每个条目还是4个字节。这样11位刚好满足一级页表的寻址工作。
+二级页表占用9位，含有512个条目，每个条目4个字节，linux分配二级页表的时候，每次会分配一个page，
+也就是4K，因为linux分配最小的单位也就是4k。这样二级页表会分成4个部分，前面2个256条目也就是2个1K 
+给linux用，后面2个256条目给硬件的mmu用。
+
+*/
 int __pte_alloc_kernel(pmd_t *pmd, unsigned long address)
 {
+
+	//利用Buddy allocator分配1page的空间，linux 分配2级页表的时候每次会分配1个page,这个page是用来放页表的
+
 	pte_t *new = pte_alloc_one_kernel(&init_mm, address);
 	if (!new)
 		return -ENOMEM;
@@ -609,13 +622,14 @@ int __pte_alloc_kernel(pmd_t *pmd, unsigned long address)
 	smp_wmb(); /* See comment in __pte_alloc */
 
 	spin_lock(&init_mm.page_table_lock);
-	if (likely(pmd_none(*pmd))) {	/* Has another populated it ? */
+	if (likely(pmd_none(*pmd))) {	/* Has another populated it ? */  // 没有被填充
+		//给pgd的地址空间赋值，为pte的基地址
 		pmd_populate_kernel(&init_mm, pmd, new);
 		new = NULL;
 	} else
 		VM_BUG_ON(pmd_trans_splitting(*pmd));
 	spin_unlock(&init_mm.page_table_lock);
-	if (new)
+	if (new) // 如果已经被填充了，就要释放这个page了
 		pte_free_kernel(&init_mm, new);
 	return 0;
 }
