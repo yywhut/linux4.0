@@ -684,8 +684,8 @@ static void __init *early_alloc(unsigned long sz)
 
 static pte_t * __init early_pte_alloc(pmd_t *pmd, unsigned long addr, unsigned long prot)
 {
-	if (pmd_none(*pmd)) {
-		pte_t *pte = early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
+	if (pmd_none(*pmd)) {// 检查表项内容，如果为0，说明pte还没有建立
+		pte_t *pte = early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);// 分配512 + 512 个页面表，
 		__pmd_populate(pmd, __pa(pte), prot);
 	}
 	BUG_ON(pmd_bad(*pmd));
@@ -698,6 +698,8 @@ static void __init alloc_init_pte(pmd_t *pmd, unsigned long addr,
 {
 	pte_t *pte = early_pte_alloc(pmd, addr, type->prot_l1);
 	do {
+		// 这里调用了arch/arm/mm/proc-v7-2level.s 
+		// 首先把pfn_pte(pfn, __pgprot(type->prot_pte)) 这个其实就是物理地址与标志
 		set_pte_ext(pte, pfn_pte(pfn, __pgprot(type->prot_pte)), 0);
 		pfn++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);

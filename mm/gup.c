@@ -41,27 +41,27 @@ static struct page *follow_page_pte(struct vm_area_struct *vma,
 	pte_t *ptep, pte;
 
 retry:
-	if (unlikely(pmd_bad(*pmd)))
+	if (unlikely(pmd_bad(*pmd)))// 检查pmd是否有效
 		return no_page_table(vma, flags);
 
 	ptep = pte_offset_map_lock(mm, pmd, address, &ptl);
-	pte = *ptep;
-	if (!pte_present(pte)) {
-		swp_entry_t entry;
+	pte = *ptep;// 取出页表中的内容
+	if (!pte_present(pte)) {// 判断这个标志，这个标志表示该页是否在内存中
+		swp_entry_t entry;  // 如果该页面不在内存中
 		/*
 		 * KSM's break_ksm() relies upon recognizing a ksm page
 		 * even while it is being migrated, so for that case we
 		 * need migration_entry_wait().
 		 */
-		if (likely(!(flags & FOLL_MIGRATION)))
+		if (likely(!(flags & FOLL_MIGRATION)))// 如果分配掩码没有定义FOLL_MIGRATION ,即这个页面没有在页面合并过程中
 			goto no_page;
-		if (pte_none(pte))
+		if (pte_none(pte))// 如果pte为空，返回错误
 			goto no_page;
 		entry = pte_to_swp_entry(pte);
 		if (!is_migration_entry(entry))
 			goto no_page;
 		pte_unmap_unlock(ptep, ptl);
-		migration_entry_wait(mm, pmd, address);
+		migration_entry_wait(mm, pmd, address);// 如果pte是正在合并中的swap页面，那么等待页面合并完成后再尝试
 		goto retry;
 	}
 	if ((flags & FOLL_NUMA) && pte_protnone(pte))
@@ -71,7 +71,7 @@ retry:
 		return NULL;
 	}
 
-	page = vm_normal_page(vma, address, pte);
+	page = vm_normal_page(vma, address, pte);// 返回page数据结构
 	if (unlikely(!page)) {
 		if ((flags & FOLL_DUMP) ||
 		    !is_zero_pfn(pte_pfn(pte)))
@@ -159,11 +159,11 @@ struct page *follow_page_mask(struct vm_area_struct *vma,
 		return page;
 	}
 
-	pgd = pgd_offset(mm, address);
+	pgd = pgd_offset(mm, address);// 得到address对应的一级页表的地址
 	if (pgd_none(*pgd) || unlikely(pgd_bad(*pgd)))
 		return no_page_table(vma, flags);
 
-	pud = pud_offset(pgd, address);
+	pud = pud_offset(pgd, address);// 这里还是pgd
 	if (pud_none(*pud))
 		return no_page_table(vma, flags);
 	if (pud_huge(*pud) && vma->vm_flags & VM_HUGETLB) {
@@ -175,7 +175,7 @@ struct page *follow_page_mask(struct vm_area_struct *vma,
 	if (unlikely(pud_bad(*pud)))
 		return no_page_table(vma, flags);
 
-	pmd = pmd_offset(pud, address);
+	pmd = pmd_offset(pud, address); // 还是pgd 
 	if (pmd_none(*pmd))
 		return no_page_table(vma, flags);
 	if (pmd_huge(*pmd) && vma->vm_flags & VM_HUGETLB) {
@@ -470,12 +470,13 @@ retry:
 		 */
 		if (unlikely(fatal_signal_pending(current)))
 			return i ? i : -ERESTARTSYS;
-		cond_resched();
+		cond_resched();// 判断当前进程是否需要被调度
+		//查看vma中的虚拟页面是否已经分配了物理内存
 		page = follow_page_mask(vma, start, foll_flags, &page_mask);
 		if (!page) {
 			int ret;
 			ret = faultin_page(tsk, vma, start, &foll_flags,
-					nonblocking);
+					nonblocking);  //  人为触发缺页中断
 			switch (ret) {
 			case 0:
 				goto retry;

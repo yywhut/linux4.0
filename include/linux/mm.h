@@ -1609,7 +1609,7 @@ static inline void pgtable_page_dtor(struct page *page)
 #define pte_offset_map_lock(mm, pmd, address, ptlp)	\
 ({							\
 	spinlock_t *__ptl = pte_lockptr(mm, pmd);	\
-	pte_t *__pte = pte_offset_map(pmd, address);	\
+	pte_t *__pte = pte_offset_map(pmd, address);	\  // 找到pte的地址，并且获得一个锁
 	*(ptlp) = __ptl;				\
 	spin_lock(__ptl);				\
 	__pte;						\
@@ -1621,6 +1621,7 @@ static inline void pgtable_page_dtor(struct page *page)
 } while (0)
 
 #define pte_alloc_map(mm, vma, pmd, address)				\
+	
 	((unlikely(pmd_none(*(pmd))) && __pte_alloc(mm, vma,	\
 							pmd, address))?	\
 	 NULL: pte_offset_map(pmd, address))
@@ -1939,7 +1940,7 @@ extern int __mm_populate(unsigned long addr, unsigned long len,
 static inline void mm_populate(unsigned long addr, unsigned long len)
 {
 	/* Ignore errors */
-	(void) __mm_populate(addr, len, 1);
+	(void) __mm_populate(addr, len, 1); // 走的这里
 }
 #else
 static inline void mm_populate(unsigned long addr, unsigned long len) {}

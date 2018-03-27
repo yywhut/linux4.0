@@ -383,7 +383,7 @@ struct mm_rss_stat {
 struct kioctx_table;
 struct mm_struct {
 	struct vm_area_struct *mmap;		/* list of VMAs */
-	struct rb_root mm_rb;
+	struct rb_ro0ot mm_rb;
 	u32 vmacache_seqnum;                   /* per-thread vmacache */
 #ifdef CONFIG_MMU
 	unsigned long (*get_unmapped_area) (struct file *filp,

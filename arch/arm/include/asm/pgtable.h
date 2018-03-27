@@ -198,7 +198,7 @@ static inline pte_t *pmd_page_vaddr(pmd_t pmd)
 
 #define pmd_page(pmd)		pfn_to_page(__phys_to_pfn(pmd_val(pmd) & PHYS_MASK))
 
-#ifndef CONFIG_HIGHPTE
+#ifndef CONFIG_HIGHPTE //没有定义
 #define __pte_map(pmd)		pmd_page_vaddr(*(pmd))
 #define __pte_unmap(pte)	do { } while (0)
 #else
@@ -216,8 +216,11 @@ static inline pte_t *pmd_page_vaddr(pmd_t pmd)
  然后把这个物理地址转化成虚拟地址， 然后加上 偏移值，也就是二级页表所在的虚拟地址
  */
 #define pte_offset_kernel(pmd,addr)	(pmd_page_vaddr(*(pmd)) + pte_index(addr))
-
+// 这跟上面的是一个功能，主要是看CONFIG_HIGHPTE 有没有定义，也就是pte是放在哪里，是否放在高端
 #define pte_offset_map(pmd,addr)	(__pte_map(pmd) + pte_index(addr))
+
+
+
 #define pte_unmap(pte)			__pte_unmap(pte)
 
 #define pte_pfn(pte)		((pte_val(pte) & PHYS_MASK) >> PAGE_SHIFT)

@@ -2,7 +2,7 @@
  * mm/mmap.c
  *
  * Written by obz.
- *
+ *rb_root
  * Address space accounting code	<alan@lxorguk.ukuu.org.uk>
  */
 
@@ -282,6 +282,7 @@ static struct vm_area_struct *remove_vma(struct vm_area_struct *vma)
 
 static unsigned long do_brk(unsigned long addr, unsigned long len);
 
+//
 SYSCALL_DEFINE1(brk, unsigned long, brk)
 {
 	unsigned long retval;
@@ -289,6 +290,7 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 	struct mm_struct *mm = current->mm;
 	unsigned long min_brk;
 	bool populate;
+	//写信号量获取操作, 得到读写信号量sem, 将直接将文件映射到内存 
 
 	down_write(&mm->mmap_sem);
 
@@ -318,10 +320,16 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 			      mm->end_data, mm->start_data))
 		goto out;
 
+
+	  /*newbrk由参数brk对齐得到，代表希望的堆地址
+
+     //oldbrk由当前堆地址mm->brk得到，代表现在的堆地址*/
 	newbrk = PAGE_ALIGN(brk);
 	oldbrk = PAGE_ALIGN(mm->brk);
 	if (oldbrk == newbrk)
 		goto set_brk;
+
+		/*如果新边界比现在的边界要小，那说明要执行收缩操作，即缩短堆，成功后跳到set_brk*/
 
 	/* Always allow shrinking brk. */
 	if (brk <= mm->brk) {
@@ -330,10 +338,24 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 		goto out;
 	}
 
+	/*想要扩大的地方已经有vma了
+
+      从本质来讲，调用do_brk也就是为了创建所需的vma，既然现在不用创建就已经有vma了，那么就可以返回了*/
+
+    /*这个函数用于寻找是否存在和希望的范围[start_addr，end_addr]有交集的vma
+
+      找到返回该vma，否则返回NULL
+
+      这里找到就说明没法增加我们的vma了，已经有vma占住位置，跳到标号out
+
+      没找到说明可以增加我们的vma，调用do_brk*/
+
 	/* Check against existing mmap mappings. */
+	//判断进程的地址空间是否与给定的地址区间相交叉
 	if (find_vma_intersection(mm, oldbrk, newbrk+PAGE_SIZE))
 		goto out;
 
+	/*扩大堆*/
 	/* Ok, looks good - let it rip. */
 	if (do_brk(oldbrk, newbrk-oldbrk) != oldbrk)
 		goto out;
@@ -2023,7 +2045,9 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 
 EXPORT_SYMBOL(get_unmapped_area);
 
-/* Look up the first VMA which satisfies  addr < vm_end,  NULL if none. */
+/* Look up the first VMA which satisfies  addr < vm_end,  NULL if none. */
+//find_vma()用来寻找一个针对于指定地址的vma，该vma要么包含了指定的地址，
+//要么位于该地址之后并且离该地址最近，或者说寻找第一个满足addr<vma_end的vma
 struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 {
 	struct rb_node *rb_node;
@@ -2041,6 +2065,11 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 		struct vm_area_struct *tmp;
 
 		tmp = rb_entry(rb_node, struct vm_area_struct, vm_rb);
+
+		/*首先确定vma的结束地址是否大于给定地址，如果是的话，再确定 
+						  vma的起始地址是否小于给定地址，也就是优先保证给定的地址是 
+						  处于vma的范围之内的，如果无法保证这点，则只能找到一个距离 
+						  给定地址最近的vma并且该vma的结束地址要大于给定地址*/  
 
 		if (tmp->vm_end > addr) {
 			vma = tmp;
@@ -2713,15 +2742,20 @@ static unsigned long do_brk(unsigned long addr, unsigned long len)
 	struct vm_area_struct *vma, *prev;
 	unsigned long flags;
 	struct rb_node **rb_link, *rb_parent;
-	pgoff_t pgoff = addr >> PAGE_SHIFT;
+	pgoff_t pgoff = addr >> PAGE_SHIFT; /*pgoff取得这个虚拟地址addr的页号*/
 	int error;
 
-	len = PAGE_ALIGN(len);
+	len = PAGE_ALIGN(len);// 申请的内存大小以页面对齐
 	if (!len)
 		return addr;
 
 	flags = VM_DATA_DEFAULT_FLAGS | VM_ACCOUNT | mm->def_flags;
 
+
+	/*创建新的vma区域之前先要寻找一块足够大小(长度为参数len)的空闲区域，
+	本函数就是用于查找没有映射过的内存区，找到后返回这个区间的起始地址addr*/
+
+	// 笨叔叔：判断虚拟内存空间是否有足够的空间，返回一段没有映射过的空间的起始地址，会调用到具体的体系结构
 	error = get_unmapped_area(NULL, addr, len, 0, MAP_FIXED);
 	if (error & ~PAGE_MASK)
 		return error;

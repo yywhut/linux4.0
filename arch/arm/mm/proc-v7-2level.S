@@ -72,9 +72,14 @@ ENDPROC(cpu_v7_switch_mm)
  *	- pte   - PTE value to store
  *	- ext	- value for extended PTE bits
  */
+
+ //set_pte_ext(pte, pfn_pte(pfn, __pgprot(type->prot_pte)), 0);
+ // r0 = pte
+ //r1 = pfn_pte(pfn, __pgprot(type->prot_pte))
+ //r2 = 0
 ENTRY(cpu_v7_set_pte_ext)
 #ifdef CONFIG_MMU
-	str	r1, [r0]			@ linux version
+	str	r1, [r0]			@ linux version  // 把物理地址与标志放入 pte中
 
 	bic	r3, r1, #0x000003f0
 	bic	r3, r3, #PTE_TYPE_MASK
