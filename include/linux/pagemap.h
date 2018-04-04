@@ -436,6 +436,9 @@ static inline void __clear_page_locked(struct page *page)
 	__clear_bit(PG_locked, &page->flags);
 }
 
+
+// 返回flase，说明已经被加锁，这个函数返回的是这个标志位原来的值，如果page
+//的PG_locked已经置位，则返回false，说明已经有别的进程锁住了这个page
 static inline int trylock_page(struct page *page)
 {
 	return (likely(!test_and_set_bit_lock(PG_locked, &page->flags)));

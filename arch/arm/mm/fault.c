@@ -226,7 +226,7 @@ __do_page_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 	struct vm_area_struct *vma;
 	int fault;
 
-	vma = find_vma(mm, addr);
+	vma = find_vma(mm, addr);// 通过失效地址addr 来查找vma，如果没有vma，说明addr地址还没有在进程地址空间中，
 	fault = VM_FAULT_BADMAP;
 	if (unlikely(!vma))
 		goto out;
@@ -237,13 +237,13 @@ __do_page_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 	 * Ok, we have a good vm_area for this
 	 * memory access, so we can handle it.
 	 */
-good_area:
+good_area:// 判断vma是否具有可写属性
 	if (access_error(fsr, vma)) {
 		fault = VM_FAULT_BADACCESS;
 		goto out;
 	}
 
-	return handle_mm_fault(mm, vma, addr & PAGE_MASK, flags);
+	return handle_mm_fault(mm, vma, addr & PAGE_MASK, flags); // 核心函数
 
 check_stack:
 	/* Don't allow expansion below FIRST_USER_ADDRESS */
@@ -276,10 +276,12 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	 * If we're in an interrupt or have no user
 	 * context, we must not take the fault..
 	 */
+	 //如果是在中断上下文或者禁止抢占，说明系统运行在院子上下文中，需要跳转
+	 // 如果当前进程中没有struct mm_struct数据结构，也需要跳转
 	if (in_atomic() || !mm)
 		goto no_context;
 
-	if (user_mode(regs))
+	if (user_mode(regs))// 如果是用户模式
 		flags |= FAULT_FLAG_USER;
 	if (fsr & FSR_WRITE)
 		flags |= FAULT_FLAG_WRITE;
@@ -289,6 +291,9 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	 * validly references user space from well defined areas of the code,
 	 * we can bug out early if this is from code which shouldn't.
 	 */
+	 // 判断mmap_sem读写信号量是否可以获取，返回1表示成功获得锁，返回0表示锁被占用
+	 //如果锁被占用，，当发生在用户空间，可以调用down_read来睡眠等待，如果发生在内核空间，
+	 //如果没有在exception_tables查询到该地址，则跳转
 	if (!down_read_trylock(&mm->mmap_sem)) {
 		if (!user_mode(regs) && !search_exception_tables(regs->ARM_pc))
 			goto no_context;
@@ -348,6 +353,7 @@ retry:
 	/*
 	 * Handle the "normal" case first - VM_FAULT_MAJOR / VM_FAULT_MINOR
 	 */
+	 // 如果没有返回这些异常，说明缺页中断处理完成了
 	if (likely(!(fault & (VM_FAULT_ERROR | VM_FAULT_BADMAP | VM_FAULT_BADACCESS))))
 		return 0;
 
@@ -358,7 +364,7 @@ retry:
 	if (!user_mode(regs))
 		goto no_context;
 
-	if (fault & VM_FAULT_OOM) {
+	if (fault & VM_FAULT_OOM) {//当前没有足有的内存，调用函数触发OOM机制
 		/*
 		 * We ran out of memory, call the OOM killer, and return to
 		 * userspace (which will retry the fault, or kill us if we
@@ -385,7 +391,7 @@ retry:
 			SEGV_ACCERR : SEGV_MAPERR;
 	}
 
-	__do_user_fault(tsk, addr, fsr, sig, code, regs);
+	__do_user_fault(tsk, addr, fsr, sig, code, regs);// 给用户进程发信号，内核已经无能为力了
 	return 0;
 
 no_context:

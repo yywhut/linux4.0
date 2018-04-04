@@ -72,47 +72,47 @@
  * SPARSEMEM_EXTREME with !SPARSEMEM_VMEMMAP).
  */
 enum pageflags {
-	PG_locked,		/* Page is locked. Don't touch. */
-	PG_error,
-	PG_referenced,
-	PG_uptodate,
-	PG_dirty,
-	PG_lru,
-	PG_active,
-	PG_slab,
-	PG_owner_priv_1,	/* Owner use. If pagecache, fs may use*/
-	PG_arch_1,
-	PG_reserved,
-	PG_private,		/* If pagecache, has fs-private data */
-	PG_private_2,		/* If pagecache, has fs aux data */
-	PG_writeback,		/* Page is under writeback */
+	PG_locked,		/* Page is locked. Don't touch. */// 已经上锁，不要访问
+	PG_error,// 发生了IO错误
+	PG_referenced,//用来实现LRU算法中第二次机会法
+	PG_uptodate,//页面内容有效，当该页面上的读操作完成后，设置该标志位
+	PG_dirty,//页面内容被修改过
+	PG_lru,//
+	PG_active,//在active链表上
+	PG_slab,//该页由slab创建
+	PG_owner_priv_1,	/* Owner use. If pagecache, fs may use*///页面的所有者使用，如果是pagecache页面，文件系统可能使用
+	PG_arch_1,//与体系结构相关
+	PG_reserved,//该页不可被换出
+	PG_private,		/* If pagecache, has fs-private data *///
+	PG_private_2,		/* If pagecache, has fs aux data */////
+	PG_writeback,		/* Page is under writeback *///正在回写
 #ifdef CONFIG_PAGEFLAGS_EXTENDED
-	PG_head,		/* A head page */
-	PG_tail,		/* A tail page */
+	PG_head,		/* A head page *///
+	PG_tail,		/* A tail page *///
 #else
-	PG_compound,		/* A compound page */
+	PG_compound,		/* A compound page *///混合页面
 #endif
-	PG_swapcache,		/* Swap page: swp_entry_t in private */
-	PG_mappedtodisk,	/* Has blocks allocated on-disk */
-	PG_reclaim,		/* To be reclaimed asap */
-	PG_swapbacked,		/* Page is backed by RAM/swap */
-	PG_unevictable,		/* Page is "unevictable"  */
+	PG_swapcache,		/* Swap page: swp_entry_t in private *///交换页面
+	PG_mappedtodisk,	/* Has blocks allocated on-disk *///
+	PG_reclaim,		/* To be reclaimed asap *///马上要被回收了
+	PG_swapbacked,		/* Page is backed by RAM/swap *///
+	PG_unevictable,		/* Page is "unevictable"  *///
 #ifdef CONFIG_MMU
-	PG_mlocked,		/* Page is vma mlocked */
+	PG_mlocked,		/* Page is vma mlocked *///
 #endif
 #ifdef CONFIG_ARCH_USES_PG_UNCACHED
-	PG_uncached,		/* Page has been mapped as uncached */
+	PG_uncached,		/* Page has been mapped as uncached *///
 #endif
 #ifdef CONFIG_MEMORY_FAILURE
-	PG_hwpoison,		/* hardware poisoned page. Don't touch */
+	PG_hwpoison,		/* hardware poisoned page. Don't touch *///
 #endif
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
-	PG_compound_lock,
+	PG_compound_lock,//
 #endif
-	__NR_PAGEFLAGS,
+	__NR_PAGEFLAGS,//
 
 	/* Filesystems */
-	PG_checked = PG_owner_priv_1,
+	PG_checked = PG_owner_priv_1,//
 
 	/* Two page bits are conscripted by FS-Cache to maintain local caching
 	 * state.  These bits are set on pages belonging to the netfs's inodes
@@ -129,7 +129,7 @@ enum pageflags {
 	PG_foreign = PG_owner_priv_1,
 
 	/* SLOB */
-	PG_slob_free = PG_private,
+	PG_slob_free = PG_private,//
 };
 
 #ifndef __GENERATING_BOUNDS_H

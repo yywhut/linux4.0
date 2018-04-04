@@ -57,6 +57,9 @@ typedef void compound_page_dtor(struct page *);
 //_mapcount为0表示该页未被共享
 
 struct page {
+
+	/***************************************************************************************/
+
 	/* First double word block */
 	//flags在page-flags.h文件夹中枚举
 	//paging_init()可设置PG_reserved做flags
@@ -82,7 +85,7 @@ struct page {
 						 */
 		void *s_mem;			/* slab first object 指向第一个obj*/  
 	};
-
+/***************************************************************************************/
 	/* Second double word */
 	struct {
 		union {
@@ -147,6 +150,7 @@ struct page {
 										// 摘走一个obj，active就变成1，再拿走一个就变成2
 		};
 	};
+/***************************************************************************************/
 
 	/* Third double word block */
 	//设置PG_slab，则该页由slab分配器来管理，lru.next指向kmem_cache_t结构变量，lru.prev则指向struct slab结构
@@ -208,6 +212,7 @@ struct page {
 		struct kmem_cache *slab_cache;	/* SL[AU]B: Pointer to slab *///第一个page页面的slab_cache 指向kmem_cache结构
 		struct page *first_page;	/* Compound tail pages */
 	};
+	/***************************************************************************************/
 
 #ifdef CONFIG_MEMCG
 	struct mem_cgroup *mem_cgroup;
@@ -330,9 +335,11 @@ struct vm_area_struct {
 	 */
 	struct list_head anon_vma_chain; /* Serialized by mmap_sem &
 					  * page_table_lock */
+					  	
 	struct anon_vma *anon_vma;	/* Serialized by page_table_lock */
 
 	/* Function pointers to deal with this struct. */
+	//用于当虚存页面不在物理内存而引起的“缺页异常”时所应该调用的函数
 	const struct vm_operations_struct *vm_ops;
 
 	/* Information about our backing store: */

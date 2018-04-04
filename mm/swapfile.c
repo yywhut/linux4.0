@@ -887,9 +887,10 @@ int reuse_swap_page(struct page *page)
 	VM_BUG_ON_PAGE(!PageLocked(page), page);
 	if (unlikely(PageKsm(page)))
 		return 0;
+	// 通过页面的_mapcount 计数给count，返回count是否小于等于1，表示只有一个进程映射了这个页面
 	count = page_mapcount(page);
 	if (count <= 1 && PageSwapCache(page)) {
-		count += page_swapcount(page);
+		count += page_swapcount(page);//判断页面是否处于swap cache中，书上说这个场景下的页面不属于swap cache
 		if (count == 1 && !PageWriteback(page)) {
 			delete_from_swap_cache(page);
 			SetPageDirty(page);

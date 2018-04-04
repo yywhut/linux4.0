@@ -25,8 +25,8 @@
  * pointing to this anon_vma once its vma list is empty.
  */
 struct anon_vma {
-	struct anon_vma *root;		/* Root of this anon_vma tree */
-	struct rw_semaphore rwsem;	/* W: modification, R: walking the list */
+	struct anon_vma *root;		/* Root of this anon_vma tree */ //数据结构根节点
+	struct rw_semaphore rwsem;	/* W: modification, R: walking the list */// 保护链表的读写信号量
 	/*
 	 * The refcount is taken on an anon_vma when there is no
 	 * guarantee that the vma of page tables will exist for
@@ -34,7 +34,7 @@ struct anon_vma {
 	 * the reference is responsible for clearing up the
 	 * anon_vma if they are the last user on release
 	 */
-	atomic_t refcount;
+	atomic_t refcount;// 引用计数
 
 	/*
 	 * Count of child anon_vmas and VMAs which points to this anon_vma.
@@ -44,7 +44,7 @@ struct anon_vma {
 	 */
 	unsigned degree;
 
-	struct anon_vma *parent;	/* Parent of this anon_vma */
+	struct anon_vma *parent;	/* Parent of this anon_vma */// 指向父数据结构
 
 	/*
 	 * NOTE: the LSB of the rb_root.rb_node is set by
@@ -54,7 +54,7 @@ struct anon_vma {
 	 * is serialized by a system wide lock only visible to
 	 * mm_take_all_locks() (mm_all_locks_mutex).
 	 */
-	struct rb_root rb_root;	/* Interval tree of private "related" vmas */
+	struct rb_root rb_root;	/* Interval tree of private "related" vmas */  
 };
 
 /*
@@ -70,11 +70,13 @@ struct anon_vma {
  * The "rb" field indexes on an interval tree the anon_vma_chains
  * which link all the VMAs associated with this anon_vma.
  */
+
+// 连接父子进程的枢纽
 struct anon_vma_chain {
-	struct vm_area_struct *vma;
-	struct anon_vma *anon_vma;
-	struct list_head same_vma;   /* locked by mmap_sem & page_table_lock */
-	struct rb_node rb;			/* locked by anon_vma->rwsem */
+	struct vm_area_struct *vma;// 可能指向父进程也可能指向子进程
+	struct anon_vma *anon_vma;// 可能指向父进程也可能指向子进程
+	struct list_head same_vma;   /* locked by mmap_sem & page_table_lock *///通常会加入vma->anon_vma_chain链表中
+	struct rb_node rb;			/* locked by anon_vma->rwsem */// 通畅加入anon_vma->rb_root
 	unsigned long rb_subtree_last;
 #ifdef CONFIG_DEBUG_VM_RB
 	unsigned long cached_vma_start, cached_vma_last;

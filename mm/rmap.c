@@ -163,7 +163,7 @@ static void anon_vma_chain_link(struct vm_area_struct *vma,
  */
 int anon_vma_prepare(struct vm_area_struct *vma)
 {
-	struct anon_vma *anon_vma = vma->anon_vma;
+	struct anon_vma *anon_vma = vma->anon_vma;// vma中有保存有这个结构，如果VMA还没有分配过匿名页面，那么vma->anon_vma为空
 	struct anon_vma_chain *avc;
 
 	might_sleep();
