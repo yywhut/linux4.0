@@ -106,6 +106,8 @@ struct scan_control {
 	unsigned long nr_reclaimed;
 };
 
+
+// 从LRU链表末尾摘除页面
 #define lru_to_page(_head) (list_entry((_head)->prev, struct page, lru))
 
 #ifdef ARCH_HAS_PREFETCH
@@ -747,21 +749,35 @@ redo:
 }
 
 enum page_references {
-	PAGEREF_RECLAIM,
+	PAGEREF_RECLAIM,    //  表示可以尝试回收该页面
 	PAGEREF_RECLAIM_CLEAN,
-	PAGEREF_KEEP,
-	PAGEREF_ACTIVATE,
+	PAGEREF_KEEP,  // 继续留在不活跃链表
+	PAGEREF_ACTIVATE,  // 表示页面会迁移到活跃链表
 };
 
+
+// 返回上面的枚举类型，用来判断该如何处理此页面
 static enum page_references page_check_references(struct page *page,
 						  struct scan_control *sc)
 {
 	int referenced_ptes, referenced_page;
 	unsigned long vm_flags;
 
+//检查该页由多少个访问引用pte
 	referenced_ptes = page_referenced(page, 1, sc->target_mem_cgroup,
 					  &vm_flags);
+
+// 返回该页面的PG_referenced标志的值，并清该标志
 	referenced_page = TestClearPageReferenced(page);
+
+
+// 通过PG_referenced的值已及pte的数目， 来判断该页的走向
+// 当该页由访问引用pte时候，要被放回到活跃LRU链表中的情况为：
+//1:该页是匿名页面  2最近第二次访问的page cache或共享的page cache，3：可执行文件的page cache
+
+// 其余的有访问引用的页面将会继续保持在不活跃LRU链表中，最后剩下的页面就是可回batt_info.fRSOC收页面的最佳候选者
+
+
 
 	/*
 	 * Mlock lost the isolation race with us.  Let try_to_unmap()

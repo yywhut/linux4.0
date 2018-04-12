@@ -257,7 +257,7 @@ struct rmap_walk_control {
 					unsigned long addr, void *arg);
 	int (*done)(struct page *page);
 	struct anon_vma *(*anon_lock)(struct page *page);
-	bool (*invalid_vma)(struct vm_area_struct *vma, void *arg);
+	bool (*invalid_vma)(struct vm_area_struct *vma, void *arg);// 跳过无效的vma
 };
 
 int rmap_walk(struct page *page, struct rmap_walk_control *rwc);

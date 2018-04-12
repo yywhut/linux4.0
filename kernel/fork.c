@@ -364,6 +364,8 @@ free_tsk:
 }
 
 #ifdef CONFIG_MMU
+
+// 我猜想 lodmm是父进程，mm是子进程
 static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 {
 	struct vm_area_struct *mpnt, *tmp, *prev, **pprev;
@@ -396,7 +398,7 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 		goto out;
 
 	prev = NULL;
-	for (mpnt = oldmm->mmap; mpnt; mpnt = mpnt->vm_next) {
+	for (mpnt = oldmm->mmap; mpnt; mpnt = mpnt->vm_next) {//  遍历父进程的进程地址空间vmas
 		struct file *file;
 
 		if (mpnt->vm_flags & VM_DONTCOPY) {
@@ -412,17 +414,19 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 				goto fail_nomem;
 			charge = len;
 		}
-		tmp = kmem_cache_alloc(vm_area_cachep, GFP_KERNEL);
+		tmp = kmem_cache_alloc(vm_area_cachep, GFP_KERNEL);// 新建一个临时用的
 		if (!tmp)
 			goto fail_nomem;
-		*tmp = *mpnt;
+		*tmp = *mpnt;//把父进程的 vma数据复制到子进程刚创建的
 		INIT_LIST_HEAD(&tmp->anon_vma_chain);
 		retval = vma_dup_policy(mpnt, tmp);
 		if (retval)
 			goto fail_nomem_policy;
 		tmp->vm_mm = mm;
-		if (anon_vma_fork(tmp, mpnt))
+		
+		if (anon_vma_fork(tmp, mpnt))//为子进程创建 anon_vma数据结构
 			goto fail_nomem_anon_vma_fork;
+		
 		tmp->vm_flags &= ~VM_LOCKED;
 		tmp->vm_next = tmp->vm_prev = NULL;
 		file = tmp->vm_file;
@@ -460,12 +464,12 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 		tmp->vm_prev = prev;
 		prev = tmp;
 
-		__vma_link_rb(mm, tmp, rb_link, rb_parent);
+		__vma_link_rb(mm, tmp, rb_link, rb_parent);// 把vma添加到子进程的红黑树
 		rb_link = &tmp->vm_rb.rb_right;
 		rb_parent = &tmp->vm_rb;
 
 		mm->map_count++;
-		retval = copy_page_range(mm, oldmm, mpnt);
+		retval = copy_page_range(mm, oldmm, mpnt);// 复制父进程的pte页表项到子进程页表项中
 
 		if (tmp->vm_ops && tmp->vm_ops->open)
 			tmp->vm_ops->open(tmp);

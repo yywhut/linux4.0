@@ -73,10 +73,10 @@ struct page {
 
 /*page->mapping == 0 属于交换高速缓存页
 *page->mapping != 0 且第0位为1，为匿名页，指向struct anon_vma
-*page->mapping != 0 且第0位为0，指向struct address_space地址空间结构变量
+*page->mapping != 0 且第0位为0，指向struct address_space地址空间结构变量//该页所在地址空间描述结构指针
 */
 	union {
-		struct address_space *mapping;	/* If low bit clear, points to //该页所在地址空间描述结构指针
+		struct address_space *mapping;	/* If low bit clear, points to 
 						 * inode address_space, or NULL.
 						 * If page mapped as anonymous
 						 * memory, low bit is set, and

@@ -1135,6 +1135,7 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
  * driver is doing some kind of reference counting. But that doesn't
  * really matter for the anon_vma sharing case.
  */
+ //复用条件：两个vma必须相邻，vma的内存policy必须相同，有相同的vm_file等
 static int anon_vma_compatible(struct vm_area_struct *a, struct vm_area_struct *b)
 {
 	return a->vm_end == b->vm_start &&

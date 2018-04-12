@@ -2636,7 +2636,7 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 
 // 如果属性可写，
 	/* Allocate our own private page. */
-	if (unlikely(anon_vma_prepare(vma)))
+	if (unlikely(anon_vma_prepare(vma)))//反向映射准备
 		goto oom;
 	// 分配一个可写的匿名页面，还是调用的 alloc_pages,优先使用高端内存
 	page = alloc_zeroed_user_highpage_movable(vma, address);
@@ -2661,7 +2661,9 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		goto release;
 
 	inc_mm_counter_fast(mm, MM_ANONPAGES);// 增加系统中匿名页面的统计计数
+	
 	page_add_new_anon_rmap(page, vma, address);//把匿名页面添加到RMAP反向映射系统中
+	
 	mem_cgroup_commit_charge(page, memcg, false);
 	lru_cache_add_active_or_unevictable(page, vma);// 添加到LRU 链表中
 setpte:

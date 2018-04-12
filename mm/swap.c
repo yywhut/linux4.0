@@ -596,6 +596,9 @@ static void __lru_cache_activate_page(struct page *page)
  */
 void mark_page_accessed(struct page *page)
 {
+
+//PG_active==0 &&  PG_referenced == 1
+
 	if (!PageActive(page) && !PageUnevictable(page) &&
 			PageReferenced(page)) {
 
@@ -605,15 +608,15 @@ void mark_page_accessed(struct page *page)
 		 * pagevec, mark it active and it'll be moved to the active
 		 * LRU on the next drain.
 		 */
-		if (PageLRU(page))
-			activate_page(page);
+		if (PageLRU(page))  
+			activate_page(page);// 设置PageActive为1
 		else
-			__lru_cache_activate_page(page);
-		ClearPageReferenced(page);
+			__lru_cache_activate_page(page);// 把该页加入活跃LRU ，
+		ClearPageReferenced(page);// 清PG_referenced
 		if (page_is_file_cache(page))
 			workingset_activation(page);
-	} else if (!PageReferenced(page)) {
-		SetPageReferenced(page);
+	} else if (!PageReferenced(page)) {// 如果PG_referenced == 0
+		SetPageReferenced(page);// 置位
 	}
 }
 EXPORT_SYMBOL(mark_page_accessed);
@@ -623,9 +626,9 @@ static void __lru_cache_add(struct page *page)
 	struct pagevec *pvec = &get_cpu_var(lru_add_pvec);
 
 	page_cache_get(page);
-	if (!pagevec_space(pvec))
-		__pagevec_lru_add(pvec);
-	pagevec_add(pvec, page);
+	if (!pagevec_space(pvec))  // 判断pageevec是否还有空间
+		__pagevec_lru_add(pvec);// 如果没有空间，则先把原有的page加入到lru链表中
+	pagevec_add(pvec, page);// 把新页面加入到pvec
 	put_cpu_var(lru_add_pvec);
 }
 

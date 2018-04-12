@@ -213,6 +213,8 @@ PAGEFLAG(Referenced, referenced) TESTCLEARFLAG(Referenced, referenced)
 	__SETPAGEFLAG(Referenced, referenced)
 PAGEFLAG(Dirty, dirty) TESTSCFLAG(Dirty, dirty) __CLEARPAGEFLAG(Dirty, dirty)
 PAGEFLAG(LRU, lru) __CLEARPAGEFLAG(LRU, lru)
+
+//对PG_active 标志的判断，最后变成static inline int Pageactive(const struct page *page) 这个函数
 PAGEFLAG(Active, active) __CLEARPAGEFLAG(Active, active)
 	TESTCLEARFLAG(Active, active)
 __PAGEFLAG(Slab, slab)
