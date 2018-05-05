@@ -153,6 +153,7 @@ struct vm_area_struct;
 #define GFP_DMA32	__GFP_DMA32
 
 /* Convert GFP flags to their corresponding migrate type */
+// 根据gfp的flag 转化成 迁移类型，也就是如果用这个分配掩码分配内存，会放到哪种迁移类型中去
 static inline int gfpflags_to_migratetype(const gfp_t gfp_flags)
 {
 	WARN_ON((gfp_flags & GFP_MOVABLE_MASK) == GFP_MOVABLE_MASK);

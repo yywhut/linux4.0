@@ -41,6 +41,8 @@ struct vm_struct {
 
 
 //管理vmap_area结构的红黑树根节点为全局变量vmap_area_root，双链表头结点为vmap_area_list。
+// 注意这里应该是内核的，与进程的vm_area_struct 应该不同
+ //vm_area_struct
 struct vmap_area {
 	unsigned long va_start;
 	unsigned long va_end;

@@ -279,7 +279,7 @@ static inline pgprot_t pgprot_modify(pgprot_t oldprot, pgprot_t newprot)
  * or the end address of the range if that comes earlier.  Although no
  * vma end wraps to 0, rounded up __boundary may wrap to 0 throughout.
  */
-////获得下一段开始地址，以PGDIR_SIZE 为步长
+////获得下一个PGD页表项的管辖地址范围的起始地址，以PGDIR_SIZE 为步长
 /*
 0xf0298000  0xf0299000
 #define PGDIR_MASK		(~(PGDIR_SIZE-1))  = 0xfff00000  

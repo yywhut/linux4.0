@@ -18,6 +18,7 @@
 #include <linux/page-flags-layout.h>
 #include <linux/atomic.h>
 #include <asm/page.h>
+remap_pfn_range
 
 /* Free memory management - zoned buddy allocator.  */
 #ifndef CONFIG_FORCE_MAX_ZONEORDER
@@ -751,6 +752,8 @@ contig_page_data
 
 */
 struct bootmem_data;
+
+// 描述内存节点，内存的根本
 typedef struct pglist_data {
 	//MAX_NR_ZONES = 3  ZONE_NORMAL, ZONE_HIGHMEM，ZONE_MOVABLE
 	struct zone node_zones[MAX_NR_ZONES];////是一个数组，包含了结点中各内存域的数据结构 
@@ -952,6 +955,8 @@ extern char numa_zonelist_order[];
 
 #ifndef CONFIG_NEED_MULTIPLE_NODES
 
+
+//  这就是arm内存的节点的全局变量
 extern struct pglist_data contig_page_data;
 #define NODE_DATA(nid)		(&contig_page_data)
 #define NODE_MEM_MAP(nid)	mem_map

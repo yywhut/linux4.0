@@ -38,6 +38,7 @@
  * Aug/Sep 2004 Changed to four level page tables (Andi Kleen)
  */
 
+
 #include <linux/kernel_stat.h>
 #include <linux/mm.h>
 #include <linux/hugetlb.h>
@@ -70,6 +71,9 @@
 #include <asm/pgtable.h>
 
 #include "internal.h"
+
+gfpflags_to_migratetype(const gfp_t gfp_flags)
+
 
 #ifdef LAST_CPUPID_NOT_IN_PAGE_FLAGS
 #warning Unfortunate NUMA and NUMA Balancing config, growing page-frame for last_cpupid.
@@ -1650,6 +1654,7 @@ static int remap_pte_range(struct mm_struct *mm, pmd_t *pmd,
 	arch_enter_lazy_mmu_mode();
 	do {
 		BUG_ON(!pte_none(*pte));
+		//pte_mkspecial 设置软件的pte_special 标志位，二级页表没有这个标志，三级以上有
 		set_pte_at(mm, addr, pte, pte_mkspecial(pfn_pte(pfn, prot)));
 		pfn++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);
@@ -1709,6 +1714,8 @@ static inline int remap_pud_range(struct mm_struct *mm, pgd_t *pgd,
  *
  *  Note: this is only safe if the mm semaphore is held when called.
  */
+
+// 映射一段物理内存到用户空间
 int remap_pfn_range(struct vm_area_struct *vma, unsigned long addr,
 		    unsigned long pfn, unsigned long size, pgprot_t prot)
 {
@@ -1746,6 +1753,7 @@ int remap_pfn_range(struct vm_area_struct *vma, unsigned long addr,
 	if (err)
 		return -EINVAL;
 
+// 这里映射的页面属于 specail mapping，不希望参与内存管理，与normal mapping 对应
 	vma->vm_flags |= VM_IO | VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP;
 
 	BUG_ON(addr >= end);
@@ -1753,7 +1761,7 @@ int remap_pfn_range(struct vm_area_struct *vma, unsigned long addr,
 	pgd = pgd_offset(mm, addr);
 	flush_cache_range(vma, addr, end);
 	do {
-		next = pgd_addr_end(addr, end);
+		next = pgd_addr_end(addr, end);  //获得下一个PGD页表项的管辖地址范围的起始地址，以PGDIR_SIZE 为步长
 		err = remap_pud_range(mm, pgd, addr, next,
 				pfn + (addr >> PAGE_SHIFT), prot);
 		if (err)

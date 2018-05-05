@@ -292,6 +292,8 @@ struct vm_region {
  * space that has a special rule for the page-fault handlers (ie a shared
  * library, the executable area etc).
  */
+
+// 进程相关的，与内核的有区别
 struct vm_area_struct {
 	/* The first cache line has the info for VMA tree walking. */
 
@@ -302,7 +304,7 @@ struct vm_area_struct {
 	/* linked list of VM areas per task, sorted by address */
 	struct vm_area_struct *vm_next, *vm_prev;
 
-	struct rb_node vm_rb;
+	struct rb_node vm_rb;  // 挂入红黑树
 
 	/*
 	 * Largest free memory gap in bytes to the left of this VMA.
@@ -333,18 +335,26 @@ struct vm_area_struct {
 	 * can only be in the i_mmap tree.  An anonymous MAP_PRIVATE, stack
 	 * or brk vma (with NULL file) can only be in an anon_vma list.
 	 */
+
+	// 管理反向映射
 	struct list_head anon_vma_chain; /* Serialized by mmap_sem &
 					  * page_table_lock */
 					  	
 	struct anon_vma *anon_vma;	/* Serialized by page_table_lock */
 
+	
+
 	/* Function pointers to deal with this struct. */
 	//用于当虚存页面不在物理内存而引起的“缺页异常”时所应该调用的函数
+	// 经常用于文件映射，里面有响应的操作函数
 	const struct vm_operations_struct *vm_ops;
 
 	/* Information about our backing store: */
+	// 一般用于文件映射，这里的单位要注意，是page为单位，对于匿名页面，通常也是有含义的，一般是0或者是 什么/page_size
 	unsigned long vm_pgoff;		/* Offset (within vm_file) in PAGE_SIZE
 					   units, *not* PAGE_CACHE_SIZE */
+
+					   
 	struct file * vm_file;		/* File we map to (can be NULL). */
 	void * vm_private_data;		/* was vm_pte (shared mem) */
 
@@ -389,8 +399,8 @@ struct mm_rss_stat {
 
 struct kioctx_table;
 struct mm_struct {
-	struct vm_area_struct *mmap;		/* list of VMAs */
-	struct rb_ro0ot mm_rb;
+	struct vm_area_struct *mmap;		/* list of VMAs */  //单链表，进程中所有的 都链接进来，注意是以vma的起始地址，按照递增的方式插入进来的
+	struct rb_root mm_rb;
 	u32 vmacache_seqnum;                   /* per-thread vmacache */
 #ifdef CONFIG_MMU
 	unsigned long (*get_unmapped_area) (struct file *filp,

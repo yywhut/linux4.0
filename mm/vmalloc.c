@@ -109,7 +109,7 @@ static void vunmap_page_range(unsigned long addr, unsigned long end)
 		vunmap_pud_range(pgd, addr, next);
 	} while (pgd++, addr = next, addr != end);
 }
-
+//PAGE_KERNEL
 static int vmap_pte_range(pmd_t *pmd, unsigned long addr,
 		unsigned long end, pgprot_t prot, struct page **pages, int *nr)
 {
@@ -368,6 +368,8 @@ static struct vmap_area *alloc_vmap_area(unsigned long size,
 	BUG_ON(size & ~PAGE_MASK);
 	BUG_ON(!is_power_of_2(align));
 
+
+// 注意这里分配了一个va
 	va = kmalloc_node(sizeof(struct vmap_area),
 			gfp_mask & GFP_RECLAIM_MASK, node);
 	if (unlikely(!va))
@@ -397,6 +399,8 @@ retry:
 	则就不利用cache，这时设置cached_hole_size=0，free_vmap_cache=NULL，
 	然后更新cached_vstart和cached_align
 	*/
+
+	//free_vmap_cache 是几年前的优化选项，这里可以不用特别关注
 	if (!free_vmap_cache ||
 			size < cached_hole_size ||
 			vstart < cached_vstart ||
@@ -421,7 +425,7 @@ nocache:
 		if (addr + size < addr)  //地址越界
 			goto overflow;
 
-	} else {  // 从这里是开始查找
+	} else {  // 从这里是开始查找，这后面是重点
 
 	/*
 	如果free_vmap_cache不存在，则从vstart设置对齐后的地址为起始地址开始遍历红黑树，
@@ -463,7 +467,9 @@ nocache:
 
 	/* from the starting point, walk areas until a suitable hole is found */
 	//0xf0000000 + 0x2000 > 0xf0000000  && 0xf0000000 + 0x2000 <= 0xff000000
+	// 这里如果while条件不满足，跳出就说明这个空洞的范围足够大，跟别的区间不重合。
 	while (addr + size > first->va_start && addr + size <= vend) {//这里是计算空洞地址是否足够
+		//从头开始找，
 		//cached_hole_size 运行的时候是0
 		if (addr + cached_hole_size < first->va_start)
 			cached_hole_size = first->va_start - addr;
@@ -1375,12 +1381,14 @@ static struct vm_struct *__get_vm_area_node(unsigned long size,
 	if (!(flags & VM_NO_GUARD))
 		size += PAGE_SIZE;  //程序跑了这里
 
+	//这个函数在整个vmalloc空间查找一个大小合适并没有使用的空间
+
 	va = alloc_vmap_area(size, align, start, end, node, gfp_mask);
 	if (IS_ERR(va)) {
 		kfree(area);
 		return NULL;
 	}
-
+// 把刚找到的区域信息填到vm中
 	setup_vmalloc_vm(area, va, flags, caller);
 
 	return area;
@@ -1602,6 +1610,8 @@ EXPORT_SYMBOL(vmap);
 static void *__vmalloc_node(unsigned long size, unsigned long align,
 			    gfp_t gfp_mask, pgprot_t prot,
 			    int node, const void *caller);
+
+
 static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 				 pgprot_t prot, int node)
 {
@@ -1609,7 +1619,7 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 	struct page **pages;
 	unsigned int nr_pages, array_size, i;
 	const gfp_t nested_gfp = (gfp_mask & GFP_RECLAIM_MASK) | __GFP_ZERO;
-	const gfp_t alloc_mask = gfp_mask | __GFP_NOWARN;
+	const gfp_t alloc_mask = gfp_mask | __GFP_NOWARN;   // 留意这里的分配mask
 
 	nr_pages = get_vm_area_size(area) >> PAGE_SHIFT;//去掉一个空洞页  1
 	array_size = (nr_pages * sizeof(struct page *));//数组大小   =4 
@@ -1617,7 +1627,8 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 	area->nr_pages = nr_pages;;//实际映射的页数
 	
 	/* Please note that the recursion is strictly bounded. */
-	// 分配page指针
+	
+	// 分配page指针,注意这里只是分配了四个字节用来保存page指针
 	if (array_size > PAGE_SIZE) {  {//如果大于一个page，则使用vmalloc来分配。这里是递归
 		pages = __vmalloc_node(array_size, 1, nested_gfp|__GFP_HIGHMEM,
 				PAGE_KERNEL, node, area->caller);
@@ -1688,7 +1699,7 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 	void *addr;
 	unsigned long real_size = size;
 
-	size = PAGE_ALIGN(size);
+	size = PAGE_ALIGN(size);  // 分配的大小要以页面对齐
 
 	//分配的内存大小不能为0或者不能大于系统的所有的内存
 	if (!size || (size >> PAGE_SHIFT) > totalram_pages)
@@ -1700,6 +1711,7 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 	if (!area)
 		goto fail;
 
+	// 找到区域之后就直接分配page，然后映射，注意这里是直接分配page，且最小也要分配一个page
 	addr = __vmalloc_area_node(area, gfp_mask, prot, node);
 	if (!addr)
 		return NULL;
@@ -1740,12 +1752,13 @@ fail:
  *	allocator with @gfp_mask flags.  Map them into contiguous
  *	kernel virtual space, using a pagetable protection of @prot.
  */
+ // sanity_check_meminfo  gfp_mask 就是flag
 static void *__vmalloc_node(unsigned long size, unsigned long align,
 			    gfp_t gfp_mask, pgprot_t prot,
 			    int node, const void *caller)
 {
 
-	//0xf0000000  0xff000000
+	//0xf0000000  0xff000000，一共240M
 	return __vmalloc_node_range(size, align, VMALLOC_START, VMALLOC_END,
 				gfp_mask, prot, 0, node, caller);
 }
@@ -1775,6 +1788,7 @@ static inline void *__vmalloc_node_flags(unsigned long size,
  */
 void *vmalloc(unsigned long size)
 {
+	// 说明优先从内核高端内存分配
 	return __vmalloc_node_flags(size, NUMA_NO_NODE,
 				    GFP_KERNEL | __GFP_HIGHMEM);
 }

@@ -5,6 +5,7 @@
  *rb_root
  * Address space accounting code	<alan@lxorguk.ukuu.org.uk>
  */
+ sys_mmap_pgoff
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 

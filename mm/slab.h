@@ -345,14 +345,14 @@ struct kmem_cache_node {
 	spinlock_t list_lock;
 
 #ifdef CONFIG_SLAB
-// 这些链表挂的都是page结构中的lru，所以需要反向查找page的时候需要用到
+// 这些链表挂的都是page结构中的lru，所以需要反向查找page的时候需要用到,笨叔说这里挂的是slab，
 	struct list_head slabs_partial;	/* partial list first, better asm code */
 	struct list_head slabs_full;
 	struct list_head slabs_free;
 	unsigned long free_objects;  //上述三个链表中空闲对象的综合，每摘除一些到 cache中，这个值就减小
 	unsigned int free_limit;  // 所有slab上容许空闲对象的最大数目
 	unsigned int colour_next;	/* Per-node cache coloring */ // 从0开始++
-	struct array_cache *shared;	/* shared per node */
+	struct array_cache *shared;	/* shared per node */  //指向共享的缓冲池
 	struct alien_cache **alien;	/* on other nodes */
 	unsigned long next_reap;	/* updated without locking */
 	int free_touched;		/* updated without locking */
