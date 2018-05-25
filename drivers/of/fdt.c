@@ -893,7 +893,8 @@ int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 		pr_debug(" - %llx ,  %llx\n", (unsigned long long)base,
 		    (unsigned long long)size);
 
-		early_init_dt_add_memory_arch(base, size);
+		early_init_dt_add_memory_arch(base, size);// 上面是查找内存，这里就是把找到的内存加到
+												// memblock子系统里面
 	}
 
 	return 0;
@@ -1032,7 +1033,7 @@ void __init early_init_dt_scan_nodes(void)
 	of_scan_flat_dt(early_init_dt_scan_root, NULL);
 
 	/* Setup memory, calling early_init_dt_add_memory_arch */
-	of_scan_flat_dt(early_init_dt_scan_memory, NULL);
+	of_scan_flat_dt(early_init_dt_scan_memory, NULL);   // 获取mameroy的base跟size
 }
 
 bool __init early_init_dt_scan(void *params)

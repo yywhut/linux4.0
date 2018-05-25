@@ -51,9 +51,10 @@
 	.globl	swapper_pg_dir
 	.equ	swapper_pg_dir, KERNEL_RAM_VADDR - PG_DIR_SIZE
 
+	// 这个宏就是算页表的基地址，也就是从16k到32k的地方是页表，0到16k是放的参数，32k以上放的是内核
 	.macro	pgtbl, rd, phys
-	add	\rd, \phys, #TEXT_OFFSET
-	sub	\rd, \rd, #PG_DIR_SIZE
+	add	\rd, \phys, #TEXT_OFFSET        //TEXT_OFFSET  就是网上32kb的地方
+	sub	\rd, \rd, #PG_DIR_SIZE    //0x4000 就是16kb
 	.endm
 
 /*
@@ -92,7 +93,8 @@ ENTRY(stext)
 	safe_svcmode_maskall r9
 
 	mrc	p15, 0, r9, c0, c0		@ get processor id
-	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
+	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid   ///arch/arm/include/asm# ls procinfo.h 
+
 	movs	r10, r5				@ invalid processor (r5=0)?
  THUMB( it	eq )		@ force fixup-able long branch encoding
 	beq	__error_p			@ yes, error 'p'
@@ -125,7 +127,7 @@ ENTRY(stext)
 #ifdef CONFIG_ARM_PATCH_PHYS_VIRT
 	bl	__fixup_pv_table
 #endif
-	bl	__create_page_tables
+	bl	__create_page_tables     // 主要是要将mmu打开的那一段代码对应的那1M做恒等映射，然后就是把内核映射到 0xc0008000
 
 	/*
 	 * The following calls CPU specific code in a position independent
@@ -134,11 +136,11 @@ ENTRY(stext)
 	 * above.  On return, the CPU will be ready for the MMU to be
 	 * turned on, and r0 will hold the CPU control register value.
 	 */
-	ldr	r13, =__mmap_switched		@ address to jump to after
+	ldr	r13, =__mmap_switched		@ address to jump to after  //这里会跳入c，这里是将__mmap_switched的链接地址也就是虚拟地址放入r13
 						@ mmu has been enabled
-	adr	lr, BSYM(1f)			@ return (PIC) address
-	mov	r8, r4				@ set TTBR1 to swapper_pg_dir
- ARM(	add	pc, r10, #PROCINFO_INITFUNC	)
+	adr	lr, BSYM(1f)			@ return (PIC) address     // 表明返回的时候，会执行__enable_mmu
+	mov	r8, r4				@ set TTBR1 to swapper_pg_dir     // r4 之前存放的是页表的基地址，之类又放到r8中
+ ARM(	add	pc, r10, #PROCINFO_INITFUNC	)     //  这里对应不同的cpu会执行不同的 init function，我们这里会跑到v7 steup这个函数里面
  THUMB(	add	r12, r10, #PROCINFO_INITFUNC	)
  THUMB(	ret	r12				)
 1:	b	__enable_mmu
@@ -164,7 +166,7 @@ __create_page_tables:
 	pgtbl	r4, r8				@ page table address
 
 	/*
-	 * Clear the swapper page table
+	 * Clear the swapper page table   清零页表
 	 */
 	mov	r0, r4
 	mov	r3, #0
@@ -204,17 +206,18 @@ __create_page_tables:
 #endif
 #endif
 
-	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags
+	ldr	r7, [r10, #PROCINFO_MM_MMUFLAGS] @ mm_mmuflags  // 读取mmu的一些标志位 放到r7中
 
+	// 这下面就是创建临时页表，这里是用的分段机制，1M大小为一段，需要把打开mmu的这一段的地址进行映射，以方便打开mmu
 	/*
 	 * Create identity mapping to cater for __enable_mmu.
 	 * This identity mapping will be removed by paging_init().
 	 */
-	adr	r0, __turn_mmu_on_loc
+	adr	r0, __turn_mmu_on_loc  // 这是打开mmu的地方
 	ldmia	r0, {r3, r5, r6}
 	sub	r0, r0, r3			@ virt->phys offset
-	add	r5, r5, r0			@ phys __turn_mmu_on
-	add	r6, r6, r0			@ phys __turn_mmu_on_end
+	add	r5, r5, r0			@ phys __turn_mmu_on      // 那个函数的起始地址
+	add	r6, r6, r0			@ phys __turn_mmu_on_end    // 那个函数的结束地址
 	mov	r5, r5, lsr #SECTION_SHIFT
 	mov	r6, r6, lsr #SECTION_SHIFT
 
@@ -223,7 +226,11 @@ __create_page_tables:
 	cmp	r5, r6
 	addlo	r5, r5, #1			@ next section
 	blo	1b
+// 以上通常1M就足够了
 
+
+
+// 这里就是映射整个内核，但是这里映射不是物理地址跟虚拟地址的恒等映射，而是以page offset 为开始进行映射。
 	/*
 	 * Map our RAM from the start to the end of the kernel .bss section.
 	 */
@@ -421,13 +428,13 @@ __secondary_data:
  *  r0  = cp#15 control register
  *  r1  = machine ID
  *  r2  = atags or dtb pointer
- *  r4  = page table (see ARCH_PGD_SHIFT in asm/memory.h)
+ *  r4  = page table (see ARCH_PGD_SHIFT in asm/memory.h) __mmap_switched 存放的地址
  *  r9  = processor ID
  *  r13 = *virtual* address to jump to upon completion
  */
 __enable_mmu:
 #if defined(CONFIG_ALIGNMENT_TRAP) && __LINUX_ARM_ARCH__ < 6
-	orr	r0, r0, #CR_A
+	orr	r0, r0, #CR_A   //在 arch/arm/include/asm/cp15.h中 
 #else
 	bic	r0, r0, #CR_A
 #endif

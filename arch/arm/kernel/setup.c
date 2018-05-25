@@ -896,8 +896,9 @@ void __init setup_arch(char **cmdline_p)
 {
 	const struct machine_desc *mdesc;
 
-	setup_processor();
-	mdesc = setup_machine_fdt(__atags_pointer);
+	setup_processor();// 初始化cpu
+	//__atags_pointer 在汇编中初始化，由uboot传递过来
+	mdesc = setup_machine_fdt(__atags_pointer);  //device tree
 	if (!mdesc)
 		mdesc = setup_machine_tags(__atags_pointer, __machine_arch_type);
 	machine_desc = mdesc;

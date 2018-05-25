@@ -1128,9 +1128,12 @@ void __init sanity_check_meminfo(void)
 {
 	phys_addr_t memblock_limit = 0;
 	int highmem = 0;
+
+	//计算 vmalloc的起始地址，这个地址也就是 normal memory跟high memory的一个分界线
 	phys_addr_t vmalloc_limit = __pa(vmalloc_min - 1) + 1;
 	struct memblock_region *reg;
 
+	//  判断下每个内存模块，是否需要拆分成high 跟normal
 	for_each_memblock(memory, reg) {
 		phys_addr_t block_start = reg->base;
 		phys_addr_t block_end = reg->base + reg->size;
@@ -1164,7 +1167,7 @@ void __init sanity_check_meminfo(void)
 		if (!highmem) {
 			if (block_end > arm_lowmem_limit) {
 				if (reg->size > size_limit)
-					arm_lowmem_limit = vmalloc_limit;
+					arm_lowmem_limit = vmalloc_limit;   // 代表normal memory的最高值
 				else
 					arm_lowmem_limit = block_end;
 			}

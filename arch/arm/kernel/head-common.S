@@ -79,10 +79,11 @@ ENDPROC(__vet_atags)
  */
 	__INIT
 __mmap_switched:
-	adr	r3, __mmap_switched_data
+	adr	r3, __mmap_switched_data  取__mmap_switched_data的地址到r3. 这个地址就是第109行的地址.
 
-	ldmia	r3!, {r4, r5, r6, r7}
-	cmp	r4, r5				@ Copy data segment if needed
+	ldmia	r3!, {r4, r5, r6, r7}    把 r3指向的地址中的数据放到 r4 这几个寄存器中
+									由于上面r3中存放的是地址，所以这里r4 到r7里面存放的都是地址
+	cmp	r4, r5				@ Copy data segment if needed  比较 __data_loc 和 _sdata
 1:	cmpne	r5, r6
 	ldrne	fp, [r4], #4
 	strne	fp, [r5], #4
@@ -93,12 +94,12 @@ __mmap_switched:
 	strcc	fp, [r6],#4
 	bcc	1b
 
- ARM(	ldmia	r3, {r4, r5, r6, r7, sp})
+ ARM(	ldmia	r3, {r4, r5, r6, r7, sp})    这里又是把地址放到后面的寄存器中
  THUMB(	ldmia	r3, {r4, r5, r6, r7}	)
  THUMB(	ldr	sp, [r3, #16]		)
 	str	r9, [r4]			@ Save processor ID
 	str	r1, [r5]			@ Save machine type
-	str	r2, [r6]			@ Save atags pointer
+	str	r2, [r6]			@ Save atags pointer   把r2中的内容保存到r6所指向的存储单元中
 	cmp	r7, #0
 	strne	r0, [r7]			@ Save control register values
 	b	start_kernel
