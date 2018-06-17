@@ -30,8 +30,16 @@
 #define __pfn_to_page(pfn)	(mem_map + ((pfn) - ARCH_PFN_OFFSET))
 
 //把page转化成pfn   地址相减，mem_map 肯定是 0x1000 类似的，然后第二个肯定是 0x1004类似的。
+/*
+指针之间可以相减，但不可以相加：两个同一类型的指针变量是可以相减的，他们的意义表示两个指针指
+向的内存位置之间相隔多少个元素(注意是元素，并不是字节数)
+*/
+//page 类型占用0x20多个字节
+
+//(unsigned long)((page) - mem_map) 是看的指针计算，所以结果要除以0x20
+// 但是这里算完了之后，被大括号强制转化为(unsigned long)， 再加ARCH_PFN_OFFSET，就是数字加数字了，
 #define __page_to_pfn(page)	((unsigned long)((page) - mem_map) + \
-				 ARCH_PFN_OFFSET)
+				 ARCH_PFN_OFFSET)       //ARCH_PFN_OFFSET = 0x60000
 #elif defined(CONFIG_DISCONTIGMEM)
 
 #define __pfn_to_page(pfn)			\

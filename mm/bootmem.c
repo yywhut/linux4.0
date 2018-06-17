@@ -271,6 +271,8 @@ void __init reset_all_zones_managed_pages(void)
  *
  * Returns the number of pages actually released.
  */
+
+// 这里没有走，要留意哦
 unsigned long __init free_all_bootmem(void)
 {
 	unsigned long total_pages = 0;

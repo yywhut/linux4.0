@@ -241,6 +241,7 @@ const struct machine_desc * __init setup_machine_fdt(unsigned int dt_phys)
 	if (mdesc->dt_fixup)
 		mdesc->dt_fixup();
 
+	// 重要函数，第一次查找内存的信息
 	early_init_dt_scan_nodes(); // 去dts查找跟内存相关的信息
 
 	/* Change machine number to match the mdesc we're using */

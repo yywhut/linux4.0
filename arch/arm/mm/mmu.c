@@ -1133,12 +1133,16 @@ void __init sanity_check_meminfo(void)
 	phys_addr_t vmalloc_limit = __pa(vmalloc_min - 1) + 1;
 	struct memblock_region *reg;
 
-	//  判断下每个内存模块，是否需要拆分成high 跟normal
+	//  判断下每个内存模块，是否需要拆分成high 跟normal， 此时memroy就一个block
 	for_each_memblock(memory, reg) {
 		phys_addr_t block_start = reg->base;
 		phys_addr_t block_end = reg->base + reg->size;
 		phys_addr_t size_limit = reg->size;
 
+		eprintk("block_start=0x%x, block_end=0x%x\n,size_limit=0x%x\n",
+					   block_start,block_end,size_limit);
+
+		//block_start= 0x60000000, block_end =  0xa0000000			   
 		if (reg->base >= vmalloc_limit)
 			highmem = 1;
 		else
@@ -1206,7 +1210,11 @@ void __init sanity_check_meminfo(void)
 		memblock_limit = round_down(memblock_limit, SECTION_SIZE);
 	if (!memblock_limit)
 		memblock_limit = arm_lowmem_limit;
-
+	
+	eprintk("arm_lowmem_limit:0x%x, vmalloc_min=0x%x, vmalloc_limit =0x%x\n",
+			arm_lowmem_limit,vmalloc_min,vmalloc_limit);
+//arm_lowmem_limit = 0x8f800000 是物理地址，减去0x60000000  = 760M,  vmalloc_min = 0xef800000 就是转化后的虚拟地址
+//vmalloc_limit = 0x8f800000   760M
 	memblock_set_current_limit(memblock_limit);
 }
 
@@ -1264,6 +1272,8 @@ void __init arm_mm_memblock_reserve(void)
 	 * Reserve the page tables.  These are already in use,
 	 * and can only be in node 0.
 	 */
+
+	// 保留页表 [0x00000060004000-0x00000060007fff]
 	memblock_reserve(__pa(swapper_pg_dir), SWAPPER_PG_DIR_SIZE);
 
 #ifdef CONFIG_SA1111
@@ -1390,9 +1400,12 @@ static void __init kmap_init(void)
 			_PAGE_KERNEL_TABLE);
 }
 
+
+// 也就是映射了内核，跟内核到 760M的地方 也就是vmalloc的开始地方
 static void __init map_lowmem(void)
 {
 	struct memblock_region *reg;
+	//_stext __init_end 去编译好的 systemmap中去看 stext = 0xc0008000
 	phys_addr_t kernel_x_start = round_down(__pa(_stext), SECTION_SIZE); //Hex:0x60000000
 	phys_addr_t kernel_x_end = round_up(__pa(__init_end), SECTION_SIZE);//Hex:0x61000000
 
@@ -1433,7 +1446,7 @@ static void __init map_lowmem(void)
 				create_mapping(&map);
 			}
 
-
+			// 直接走的这里，上面都没进，从kernel_x_start 到kernel_x_end
 			// 这里只把kernel的16M给映射了，跟之前好像不太一样啊
 			map.pfn = __phys_to_pfn(kernel_x_start);  //Hex:0x60000
 			map.virtual = __phys_to_virt(kernel_x_start); //0xc0000000
@@ -1584,12 +1597,13 @@ void __init paging_init(const struct machine_desc *mdesc)
 {
 	void *zero_page;
 
-	build_mem_type_table();
+	build_mem_type_table(); // 创建 mem_types 这个数组
 	prepare_page_table();
 	map_lowmem();
 	dma_contiguous_remap();
-	devicemaps_init(mdesc);
-	kmap_init();
+	devicemaps_init(mdesc);  // 映射vector
+	
+	kmap_init(); //笨叔讲是初始化高端内寸，视频中跳转有问题，我感觉错了
 	tcm_init();
 
 	top_pmd = pmd_off_k(0xffff0000);
@@ -1597,7 +1611,7 @@ void __init paging_init(const struct machine_desc *mdesc)
 	/* allocate the zero page. */
 	zero_page = early_alloc(PAGE_SIZE);
 
-	bootmem_init();
+	bootmem_init();// zone初始化在这里
 
 	empty_zero_page = virt_to_page(zero_page);
 	__flush_dcache_page(NULL, empty_zero_page);

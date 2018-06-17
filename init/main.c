@@ -479,7 +479,7 @@ static void __init mm_init(void)
 	 * bigger than MAX_ORDER unless SPARSEMEM.
 	 */
 	page_ext_init_flatmem();
-	mem_init();
+	mem_init();   // 释放内存到伙伴系统
 	kmem_cache_init();
 	percpu_init_late();
 	pgtable_init();
@@ -517,7 +517,9 @@ asmlinkage __visible void __init start_kernel(void)
 	boot_cpu_init();
 	page_address_init();
 	pr_notice("%s", linux_banner);
+	
 	setup_arch(&command_line);     // 和体系结构相关的初始化
+	
 	mm_init_cpumask(&init_mm);
 	setup_command_line(command_line);
 	setup_nr_cpu_ids();
@@ -548,7 +550,9 @@ asmlinkage __visible void __init start_kernel(void)
 	vfs_caches_init_early();
 	sort_main_extable();
 	trap_init();
-	mm_init();
+
+	
+	mm_init();  // 另外一个对内存初始化的重要函数
 
 	/*
 	 * Set up the scheduler prior starting any interrupts (such as the

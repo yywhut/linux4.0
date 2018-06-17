@@ -33,7 +33,7 @@ extern unsigned long max_mapnr;
 
 static inline void set_max_mapnr(unsigned long limit)
 {
-	max_mapnr = limit;
+	max_mapnr = limit;   //Hex:0x40000
 }
 #else
 static inline void set_max_mapnr(unsigned long limit) { }
@@ -769,7 +769,9 @@ void do_set_pte(struct vm_area_struct *vma, unsigned long address,
 #error SECTIONS_WIDTH+NODES_WIDTH+ZONES_WIDTH > BITS_PER_LONG - NR_PAGEFLAGS
 #endif
 
-#define ZONES_MASK		((1UL << ZONES_WIDTH) - 1)
+
+//#define ZONES_SHIFT 2
+#define ZONES_MASK		((1UL << ZONES_WIDTH) - 1)  //ZONES_MASK = 3
 #define NODES_MASK		((1UL << NODES_WIDTH) - 1)
 #define SECTIONS_MASK		((1UL << SECTIONS_WIDTH) - 1)
 #define LAST_CPUPID_MASK	((1UL << LAST_CPUPID_SHIFT) - 1)
@@ -961,7 +963,7 @@ static inline void set_page_node(struct page *page, unsigned long node)
 static inline void set_page_links(struct page *page, enum zone_type zone,
 	unsigned long node, unsigned long pfn)
 {
-	set_page_zone(page, zone);
+	set_page_zone(page, zone); // 为啥出来还是page flag 为0
 	set_page_node(page, node);
 #ifdef SECTION_IN_PAGE_FLAGS
 	set_page_section(page, pfn_to_section_nr(pfn));

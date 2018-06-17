@@ -978,14 +978,16 @@ void __init __weak early_init_dt_add_memory_arch(u64 base, u64 size)
 		size -= phys_offset - base;
 		base = phys_offset;
 	}
-	memblock_add(base, size);
+	memblock_add(base, size);// 最后进来就是 Hex:0x60000000  Hex:0x40000000
 }
 
+
+// 走的这里
 int __init __weak early_init_dt_reserve_memory_arch(phys_addr_t base,
 					phys_addr_t size, bool nomap)
 {
 	if (nomap)
-		return memblock_remove(base, size);
+		return memblock_remove(base, size); // 0x68000000    Hex:0xbbe0
 	return memblock_reserve(base, size);
 }
 

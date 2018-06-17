@@ -82,28 +82,36 @@ void __init free_bootmem_late(unsigned long addr, unsigned long size)
 	}
 }
 
+
+// 这段代码有大学问
+// 第一个玄机，这里start end 是页帧号，而不是地址
 static void __init __free_pages_memory(unsigned long start, unsigned long end)
 {
 	int order;
 
 	while (start < end) {
-		order = min(MAX_ORDER - 1UL, __ffs(start));
+		order = min(MAX_ORDER - 1UL, __ffs(start));// 计算最合适的order值
+			//__ffs这个函数计算页帧号start中，第一个为1的bit位是第几个bit位
+			// 例如0x61053第一个为1的bit是第0位，所以__ffs为0
 
 		while (start + (1UL << order) > end)
 			order--;
-
-		__free_pages_bootmem(pfn_to_page(start), order);
+		// 第一次过来order  = 2  也就是4个page，，，start = Hex:0x60000
+		__free_pages_bootmem(pfn_to_page(start), order); //把具有这些order值得页面添加到伙伴系统中
 
 		start += (1UL << order);
 	}
 }
 
+
+// 第一次进来的时候 start = 0x60000000 end = 0x60004000
 static unsigned long __init __free_memory_core(phys_addr_t start,
 				 phys_addr_t end)
 {
-	unsigned long start_pfn = PFN_UP(start);
+// 转换成页帧号
+	unsigned long start_pfn = PFN_UP(start);  //Hex:0x60000
 	unsigned long end_pfn = min_t(unsigned long,
-				      PFN_DOWN(end), max_low_pfn);
+				      PFN_DOWN(end), max_low_pfn);   //Hex:0x60004
 
 	if (start_pfn > end_pfn)
 		return 0;
@@ -121,6 +129,7 @@ static unsigned long __init free_low_memory_core_early(void)
 
 	memblock_clear_hotplug(0, -1);
 
+	// 通过mem range 找到所有的rang，然后把这些mem添加到内存管理的核心里面
 	for_each_free_mem_range(i, NUMA_NO_NODE, &start, &end, NULL)
 		count += __free_memory_core(start, end);
 
@@ -171,6 +180,7 @@ void __init reset_all_zones_managed_pages(void)
  *
  * Returns the number of pages actually released.
  */
+ // 走的是这里
 unsigned long __init free_all_bootmem(void)
 {
 	unsigned long pages;

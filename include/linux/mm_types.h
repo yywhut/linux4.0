@@ -135,7 +135,7 @@ struct page {
 					 * never succeed on tail
 					 * pages.
 					 */
-					atomic_t _mapcount;  //页映射计数器
+					atomic_t _mapcount;  //页映射计数器， 初始化的时候被设定成-1
 
 					struct { /* SLUB */
 						unsigned inuse:16;
@@ -144,7 +144,7 @@ struct page {
 					};
 					int units;	/* SLOB */
 				};
-				atomic_t _count;		/* Usage count, see below. */ //页引用计数器
+				atomic_t _count;		/* Usage count, see below. */ //页引用计数器,在初始化的时候就被置1了
 			};
 			unsigned int active;	/* SLAB */  // 作为下标，来指向可用的obj， active 来表示数组的下标,同时也表示活跃对象的计数，当这个计数为0的时候可以销毁这个slab
 										// 摘走一个obj，active就变成1，再拿走一个就变成2

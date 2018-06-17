@@ -135,7 +135,7 @@ static inline unsigned long zone_page_state(struct zone *zone,
 	if (x < 0)
 		x = 0;
 #endif
-	return x;
+	return x;   // 这里返回  Hex:0x2d61e
 }
 
 /*

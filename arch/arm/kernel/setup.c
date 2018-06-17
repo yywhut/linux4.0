@@ -648,6 +648,8 @@ void __init dump_machine_table(void)
 		/* can't use cpu_relax() here as it may require MMU setup */;
 }
 
+
+// 这里也没有执行
 int __init arm_add_memory(u64 start, u64 size)
 {
 	u64 aligned_start;
@@ -713,7 +715,7 @@ int __init arm_add_memory(u64 start, u64 size)
  * Pick out the memory size.  We look for mem=size@start,
  * where start and size are "size[KkMm]"
  */
-
+//  这里应该是没有执行
 static int __init early_mem(char *p)
 {
 	static int usermem __initdata = 0;
@@ -898,6 +900,7 @@ void __init setup_arch(char **cmdline_p)
 
 	setup_processor();// 初始化cpu
 	//__atags_pointer 在汇编中初始化，由uboot传递过来
+	//在这里第一次扫描内存并且添加到memblock中
 	mdesc = setup_machine_fdt(__atags_pointer);  //device tree
 	if (!mdesc)
 		mdesc = setup_machine_tags(__atags_pointer, __machine_arch_type);
@@ -927,9 +930,9 @@ void __init setup_arch(char **cmdline_p)
 根据是否存在高端内存决定每个bank的highmem成员值；然后是对于每个bank的正确性进行检测；
 */
 	sanity_check_meminfo();
-	arm_memblock_init(mdesc);
+	arm_memblock_init(mdesc);    // 保留一些memblock模块，添加到reserve中
 
-	paging_init(mdesc);
+	paging_init(mdesc);  // zone 的初始化也在这里
 	request_standard_resources(mdesc);
 
 	if (mdesc->restart)

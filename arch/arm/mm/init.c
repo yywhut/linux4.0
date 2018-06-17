@@ -245,6 +245,18 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max_low,
 			arm_dma_zone_size >> PAGE_SHIFT);
 #endif
 
+/*
+运行到这里的时候
+zone_size[0] = 0x2f800
+zone_size[1] = 0x10800
+zone_size[2] = 0
+
+zhole_size[0] = 0
+zhole_size[1] = 0
+zhole_size[2] = 0
+
+*/
+
 		//min：0x60000
 	free_area_init_node(0, zone_size, min, zhole_size);
 }
@@ -289,11 +301,14 @@ phys_addr_t __init arm_memblock_steal(phys_addr_t size, phys_addr_t align)
 
 void __init arm_memblock_init(const struct machine_desc *mdesc)
 {
+
+	// 这里是第一个保留的memblock_reserve: [0x00000060008280-0x0000006112e157] flags 0x0 memblock_reserve+0x24/0x34
 	/* Register the kernel text, kernel data and initrd with memblock. */
+	// 保留内核镜像
 #ifdef CONFIG_XIP_KERNEL
 	memblock_reserve(__pa(_sdata), _end - _sdata);
 #else
-	memblock_reserve(__pa(_stext), _end - _stext);
+	memblock_reserve(__pa(_stext), _end - _stext);   // base:60008280打印出来是这个，符合，也就是要保这一段
 #endif
 #ifdef CONFIG_BLK_DEV_INITRD
 	/* FDT scan will populate initrd_start */
@@ -326,7 +341,7 @@ void __init arm_memblock_init(const struct machine_desc *mdesc)
 	arm_mm_memblock_reserve();
 
 	/* reserve any platform specific memblock areas */
-	if (mdesc->reserve)
+	if (mdesc->reserve)  // 应该没有执行
 		mdesc->reserve();
 
 	early_init_fdt_scan_reserved_mem();
@@ -427,7 +442,7 @@ static void __init free_unused_memmap(void)
 	 * The banks are sorted previously in bootmem_init().
 	 */
 	for_each_memblock(memory, reg) {
-		start = memblock_region_memory_base_pfn(reg);
+		start = memblock_region_memory_base_pfn(reg);  //start Hex:0x60000
 
 #ifdef CONFIG_SPARSEMEM
 		/*
@@ -435,20 +450,20 @@ static void __init free_unused_memmap(void)
 		 * due to SPARSEMEM sections which aren't present.
 		 */
 		start = min(start,
-				 ALIGN(prev_end, PAGES_PER_SECTION));
+				 ALIGN(prev_end, PAGES_PER_SECTION));  
 #else
 		/*
 		 * Align down here since the VM subsystem insists that the
 		 * memmap entries are valid from the bank start aligned to
 		 * MAX_ORDER_NR_PAGES.
 		 */
-		start = round_down(start, MAX_ORDER_NR_PAGES);
+		start = round_down(start, MAX_ORDER_NR_PAGES);   //start Hex:0x60000
 #endif
 		/*
 		 * If we had a previous bank, and there is a space
 		 * between the current bank and the previous, free it.
 		 */
-		if (prev_end && prev_end < start)
+		if (prev_end && prev_end < start)   // 没执行
 			free_memmap(prev_end, start);
 
 		/*
@@ -457,7 +472,7 @@ static void __init free_unused_memmap(void)
 		 * MAX_ORDER_NR_PAGES.
 		 */
 		prev_end = ALIGN(memblock_region_memory_end_pfn(reg),
-				 MAX_ORDER_NR_PAGES);
+				 MAX_ORDER_NR_PAGES);  // Hex:0xa0000
 	}
 
 #ifdef CONFIG_SPARSEMEM
@@ -539,8 +554,8 @@ void __init mem_init(void)
 	set_max_mapnr(pfn_to_page(max_pfn) - mem_map);
 
 	/* this will put all unused low memory onto the freelists */
-	free_unused_memmap();
-	free_all_bootmem();
+	free_unused_memmap();  // 没啥用
+	free_all_bootmem();   // 在这里添加到伙伴系统
 
 #ifdef CONFIG_SA1111
 	/* now that our DMA memory is actually so designated, we can free it */

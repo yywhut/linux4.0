@@ -162,6 +162,12 @@ static inline int gfpflags_to_migratetype(const gfp_t gfp_flags)
 		return MIGRATE_UNMOVABLE;
 
 	/* Group based on mobility */
+
+	// 0xd0 & 0x08
+	// 0xd0 & 0x80000
+
+	// 0 << 1 | 0
+	// 根据前一类型可以查出来 2 就是  MIGRATE_MOVABLE,
 	return (((gfp_flags & __GFP_MOVABLE) != 0) << 1) |
 		((gfp_flags & __GFP_RECLAIMABLE) != 0);
 }
@@ -220,6 +226,8 @@ static inline int gfpflags_to_migratetype(const gfp_t gfp_flags)
 #if 16 * ZONES_SHIFT > BITS_PER_LONG
 #error ZONES_SHIFT too large to create GFP_ZONE_TABLE integer
 #endif
+
+
 //ZONES_SHIFT = 2
 //ZONE_NORMAL = 0  OPT_ZONE_DMA = ZONE_NORMAL = 0
 //1 << 0x02 * 2
@@ -255,13 +263,17 @@ static inline int gfpflags_to_migratetype(const gfp_t gfp_flags)
 
 static inline enum zone_type gfp_zone(gfp_t flags)
 {
+// GFP_KERNEL 做为mask 则数值为 0xd0,GFP_ZONEMASK 是分配掩码的最低四位
 	enum zone_type z;
 	int bit = (__force int) (flags & GFP_ZONEMASK);
  	//bit =0xd0 &  0x0f = 0
+ 	
 	//0x200010 >> 0   &    1 << 2 -1
 	z = (GFP_ZONE_TABLE >> (bit * ZONES_SHIFT)) &
 					 ((1 << ZONES_SHIFT) - 1);
 	VM_BUG_ON((GFP_ZONE_BAD >> bit) & 1);
+
+	// 算出z是0
 	return z;
 }
 
@@ -291,6 +303,8 @@ static inline int gfp_zonelist(gfp_t flags)
  */
 static inline struct zonelist *node_zonelist(int nid, gfp_t flags)
 {
+
+	//gfp_zonelist(flags)  大部分情况返回0
 	return NODE_DATA(nid)->node_zonelists + gfp_zonelist(flags);
 }
 

@@ -25,6 +25,8 @@
 
 #include "internal.h"
 
+///sys/kernel/debug/memblock/memory
+///sys/kernel/debug/memblock/reserved
 
 
 /*
@@ -240,7 +242,7 @@ phys_addr_t __init_memblock memblock_find_in_range_node(phys_addr_t size,
 
 		/* ok, try bottom-up allocation first */
 		ret = __memblock_find_range_bottom_up(bottom_up_start, end,
-						      size, align, nid);
+						      size, align, nid);  // 有点难理解
 		if (ret)
 			return ret;
 
@@ -526,23 +528,26 @@ int __init_memblock memblock_add_range(struct memblock_type *type,
 				int nid, unsigned long flags)
 {
 
-//nid =1 ,flag =0
+	//nid =1 ,flag =0
 	bool insert = false;
 	phys_addr_t obase = base;
-	phys_addr_t end = base + memblock_cap_size(base, &size);
+
+	/*  获取内存区域的结束位置,memblock_cap_size函数会设置size大小确保base + size不会溢出  */
+	phys_addr_t end = base + memblock_cap_size(base, &size);  // end = 0xa0000000
 	int i, nr_new;
 
 	if (!size)
 		return 0;
 
-	//第一次进来会先进这里
+	//第一次进来会先进这里,如果内存集合为空，则不需要执行插入或者合并动作
+	// 第一次放memroy 跟reserve 都是先进的这里
 	/* special case for empty array */
 	if (type->regions[0].size == 0) {
 		WARN_ON(type->cnt != 1 || type->total_size);
 		type->regions[0].base = base;
 		type->regions[0].size = size;
 		type->regions[0].flags = flags;
-		memblock_set_region_node(&type->regions[0], nid);
+		memblock_set_region_node(&type->regions[0], nid);   // 就是1
 		type->total_size = size;
 		return 0;
 	}
@@ -552,6 +557,7 @@ repeat:
 	 * then with %true.  The first counts the number of regions needed
 	 * to accomodate the new area.  The second actually inserts them.
 	 */
+	 //第二次循环，从repeat标签开始经过同样的循环然后用memblock_insert_region函数把当前内存区域插入到内存块：
 	base = obase;
 	nr_new = 0;
 
@@ -568,6 +574,7 @@ repeat:
 		 * @rgn overlaps.  If it separates the lower part of new
 		 * area, insert that portion.
 		 */
+		 // 如果内存区重叠，则先插入低地址部分base-rbase，然后重新计算base地址
 		if (rbase > base) {
 			nr_new++;
 			if (insert)
@@ -579,7 +586,7 @@ repeat:
 		base = min(rend, end);
 	}
 
-	/* insert the remaining portion */
+	/* insert the remaining portion */ //  插入内存区 base - end
 	if (base < end) {
 		nr_new++;
 		if (insert)
@@ -594,8 +601,11 @@ repeat:
 
 	//如果出现region[]数组空间不够的情况，则通过memblock_double_array()添加新的
 	//region[]空间；最后通过memblock_merge_regions()把紧挨着的内存合并了。
+
+	/*  第一次执行的的时候insert == false  */
 	if (!insert) {
 		while (type->cnt + nr_new > type->max)
+			//memblock_double_array函数加倍给定的内存区域大小，然后把insert设为true再转到repeat标签.
 			if (memblock_double_array(type, obase, size) < 0)
 				return -ENOMEM;
 		insert = true;
@@ -615,7 +625,7 @@ int __init_memblock memblock_add_node(phys_addr_t base, phys_addr_t size,
 int __init_memblock memblock_add(phys_addr_t base, phys_addr_t size)
 {
 	return memblock_add_range(&memblock.memory, base, size,
-				   MAX_NUMNODES, 0);
+				   MAX_NUMNODES, 0);  //MAX_NUMNODES 就是1
 }
 
 /**

@@ -36,6 +36,8 @@ remap_pfn_range
  */
 #define PAGE_ALLOC_COSTLY_ORDER 3
 
+
+// 迁移类型枚举
 enum {
 	MIGRATE_UNMOVABLE,
 	MIGRATE_RECLAIMABLE,
@@ -70,6 +72,8 @@ enum {
 #  define is_migrate_cma(migratetype) false
 #endif
 
+
+//每一个order下面的 每一个 MIGRATE_TYPES
 #define for_each_migratetype_order(order, type) \
 	for (order = 0; order < MAX_ORDER; order++) \
 		for (type = 0; type < MIGRATE_TYPES; type++)
@@ -319,7 +323,7 @@ enum zone_type {
 	 * transfers to all addressable memory.
 	 */
 	ZONE_NORMAL,
-#ifdef CONFIG_HIGHMEM  //有
+#ifdef CONFIG_HIGHMEM  //有   这个是0
 	/*
 	 * A memory area that is only addressable by the kernel through
 	 * mapping portions into its own address space. This is for example
@@ -328,9 +332,9 @@ enum zone_type {
 	 * table entries on i386) for each page that the kernel needs to
 	 * access.
 	 */
-	ZONE_HIGHMEM,
+	ZONE_HIGHMEM,    // 这个是1
 #endif
-	ZONE_MOVABLE,
+	ZONE_MOVABLE,   //  这个是2
 	__MAX_NR_ZONES// 这里应该是3，
 };
 
@@ -395,16 +399,16 @@ struct zone {
 
 	/*
 	 * spanned_pages is the total pages spanned by the zone, including
-	 * holes, which is calculated as:
+	 * holes, which is calculated as:     // 从数字上有多少个page
 	 * 	spanned_pages = zone_end_pfn - zone_start_pfn;
 	 *
 	 * present_pages is physical pages existing within the zone, which
-	 * is calculated as:
+	 * is calculated as:    // 减去空洞
 	 *	present_pages = spanned_pages - absent_pages(pages in holes);
 	 *
 	 * managed_pages is present pages managed by the buddy system, which
 	 * is calculated as (reserved_pages includes pages allocated by the
-	 * bootmem allocator):
+	 * bootmem allocator):  减去保留的，也就是留给伙伴系统的
 	 *	managed_pages = present_pages - reserved_pages;
 	 *
 	 * So present_pages may be used by memory hotplug or memory power
@@ -761,19 +765,24 @@ typedef struct pglist_data {
 	//MAX_ZONELISTS = 1用于分配页框时，查找从哪个zone分配
 	//eason的理解，如果是numa，这个MAX_ZONELISTS可能会等于2，有一条别用的分配列表
 	//在uma中，这个值是1，这个结构体表明在分配内存的时候，首先从哪个node上进行分配
-	//上一行的struct node_zone[]数组中 0-normal,1-HighMem 2-moveable，没有
+	//上一行的struct node_zone[]数组中 0-normal,1-HighMem 2-moveable，
 	//这里的node_zonelists[]数组中 0-HighMem,1-normal
 	//故其对应关系为node_zonelists[0]->_zonerefs[0] = &node_zones[1]
 	// node_zonelists[0]->_zonerefs[1] = &node_zones[0]
 	// 也就是分配的时候是先从HighMem 开始分配
-	struct zonelist node_zonelists[MAX_ZONELISTS];//指点了备用结点及其内存域的列表，以便在当前结点没有可用空间时，在备用结点分配内存  
+	struct zonelist node_zonelists[MAX_ZONELISTS];//这里其实就是保存了上面的  node_zones的地址，目的就是分配的时候
+		// 从哪里先分起
 
 	int nr_zones; //保存结点中不同内存域的数目  
+
+	
 #ifdef CONFIG_FLAT_NODE_MEM_MAP	/* means !SPARSEMEM */
 	struct page *node_mem_map;  //指向page实例数组的指针，用于描述结点的所有物理内存页，它包含了结点中所有内存域的页。  
+
 #ifdef CONFIG_PAGE_EXTENSION
 	struct page_ext *node_page_ext;
 #endif
+
 #endif
 
 //在系统启动期间，内存管理子系统初始化之前，内核页需要使用内存（另外，还需要保留部分内存用于初始化内存管理子系统）。为解决这个问题，内核使用了前面文章讲解的自举内存分配器
@@ -795,8 +804,10 @@ typedef struct pglist_data {
 	spinlock_t node_size_lock;
 #endif
 	unsigned long node_start_pfn;//该NUMA结点第一个页帧的逻辑编号。系统中所有的页帧是依次编号的，每个页帧的号码都是全局唯一的（不只是结点内唯一）。 
+								//这个值会被初始化成 //0x60000
+
 	unsigned long node_present_pages; /* total number of physical pages */ //结点中页帧的数目  
-	unsigned long node_spanned_pages; /* total size of physical page//该结点以页帧为单位计算的长度，包含内存空洞。  
+	unsigned long node_spanned_pages; /* total size of physical page//该节点一共多少个page，其实就是0x40000个page  
 					     range, including holes */
 	int node_id;
 	wait_queue_head_t kswapd_wait;//交换守护进程的等待队列，在将页帧换出结点时会用到
