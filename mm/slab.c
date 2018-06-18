@@ -570,9 +570,8 @@ static void cache_estimate(unsigned long gfporder, size_t buffer_size,
 
 	} else {
 		//计算为163
-		//slab_size = 4096.buffer_size = 24
-		nr_objs = calculate_nr_objs(slab_size, buffer_size,
-					sizeof(freelist_idx_t), align);
+		//slab_size = 4096.buffer_size = 24 想要分配的加aline，freelist_idx_t 每一个obj需要一个字节
+		nr_objs = calculate_nr_objs(slab_size, buffer_size,sizeof(freelist_idx_t), align);
 		mgmt_size = calculate_freelist_size(nr_objs, align); //168
 	}
 	*num = nr_objs;
@@ -700,6 +699,7 @@ static void init_arraycache(struct array_cache *ac, int limit, int batch)
 static struct array_cache *alloc_arraycache(int node, int entries,
 					    int batchcount, gfp_t gfp)
 {
+	//4 * 480+  16
 	size_t memsize = sizeof(void *) * entries + sizeof(struct array_cache);//1936
 	struct array_cache *ac = NULL;
 
@@ -2023,7 +2023,7 @@ static struct array_cache __percpu *alloc_kmem_cache_cpus(
 	size_t size;
 	struct array_cache __percpu *cpu_cache;
 
-	//4 * 120 +
+	//4 * 120 + 16
 	//size= 496   为什么加了16
 	size = sizeof(void *) * entries + sizeof(struct array_cache);
 	// 这里很重要
@@ -2251,7 +2251,8 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 	if (FREELIST_BYTE_INDEX && size < SLAB_OBJ_MIN_SIZE)
 		size = ALIGN(SLAB_OBJ_MIN_SIZE, cachep->align);
 
-	// 计算slab的order 以及包含几个obj，
+	// 计算slab的order 以及包含几个obj，size 是想要分配的大小20 再加上aline =24bytes
+	// left_over 是把obj以及freelist_size减去后，所剩于的字节，留给colour用
 	left_over = calculate_slab_order(cachep, size, cachep->align, flags);
 //left_over = 16
 	if (!cachep->num)
@@ -3674,9 +3675,7 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 			//分配共享对象缓冲池 为多核cpu之间共享空闲缓存对象
 			// 分配了 8 * 60 个 obj 的entry，注意这里只是分配entry还没分配obj
 			// 一个struct array_cache 头以及480个对象
-			new_shared = alloc_arraycache(node,
-				cachep->shared*cachep->batchcount,
-					0xbaadf00d, gfp);
+			new_shared = alloc_arraycache(node,cachep->shared*cachep->batchcount,0xbaadf00d, gfp);
 			if (!new_shared) {
 				free_alien_cache(new_alien);
 				goto fail;
@@ -3723,11 +3722,10 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 		n->next_reap = jiffies + REAPTIMEOUT_NODE +
 				((unsigned long)cachep) % REAPTIMEOUT_NODE;
 		n->shared = new_shared;// 分配的那8*60个共享的obj，都挂在这里
-		n->alien = new_alien;
+		n->alien = new_alien;   //0
 
 		// 283 = 2 * 60 + 163  这里是为什么
-		n->free_limit = (1 + nr_cpus_node(node)) *
-					cachep->batchcount + cachep->num;
+		n->free_limit = (1 + nr_cpus_node(node)) * cachep->batchcount + cachep->num;
 		// 赋值kmem_cache_node
 		cachep->node[node] = n;
 	}
@@ -3771,11 +3769,11 @@ static int __do_tune_cpucache(struct kmem_cache *cachep, int limit,
 	kick_all_cpus_sync();
 
 	check_irq_on();
-	cachep->batchcount = batchcount;
-	cachep->limit = limit;
-	cachep->shared = shared;
+	cachep->batchcount = batchcount;  //60
+	cachep->limit = limit;   //120
+	cachep->shared = shared;   //8
 
-	if (!prev)// 应该是空
+	if (!prev)// 应该是空， 直接分配了
 		goto alloc_node;
 
 	for_each_online_cpu(cpu) {

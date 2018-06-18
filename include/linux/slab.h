@@ -294,6 +294,9 @@ void kmem_cache_free(struct kmem_cache *, void *);
 void *__kmalloc_node(size_t size, gfp_t flags, int node);
 void *kmem_cache_alloc_node(struct kmem_cache *, gfp_t flags, int node);
 #else
+
+
+//走的这里
 static __always_inline void *__kmalloc_node(size_t size, gfp_t flags, int node)
 {
 	return __kmalloc(size, flags);
