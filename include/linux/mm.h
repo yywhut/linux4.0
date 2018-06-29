@@ -737,9 +737,9 @@ void do_set_pte(struct vm_area_struct *vma, unsigned long address,
  */
 
 /* Page flags: | [SECTION] | [NODE] | ZONE | [LAST_CPUPID] | ... | FLAGS | */
-#define SECTIONS_PGOFF		((sizeof(unsigned long)*8) - SECTIONS_WIDTH)
-#define NODES_PGOFF		(SECTIONS_PGOFF - NODES_WIDTH)
-#define ZONES_PGOFF		(NODES_PGOFF - ZONES_WIDTH)
+#define SECTIONS_PGOFF		((sizeof(unsigned long)*8) - SECTIONS_WIDTH)  //32
+#define NODES_PGOFF		(SECTIONS_PGOFF - NODES_WIDTH) //32 -0
+#define ZONES_PGOFF		(NODES_PGOFF - ZONES_WIDTH)  32-2
 #define LAST_CPUPID_PGOFF	(ZONES_PGOFF - LAST_CPUPID_WIDTH)
 
 /*
@@ -749,7 +749,7 @@ void do_set_pte(struct vm_area_struct *vma, unsigned long address,
  */
 #define SECTIONS_PGSHIFT	(SECTIONS_PGOFF * (SECTIONS_WIDTH != 0))
 #define NODES_PGSHIFT		(NODES_PGOFF * (NODES_WIDTH != 0))
-#define ZONES_PGSHIFT		(ZONES_PGOFF * (ZONES_WIDTH != 0))
+#define ZONES_PGSHIFT		(ZONES_PGOFF * (ZONES_WIDTH != 0))//30 * 1 
 #define LAST_CPUPID_PGSHIFT	(LAST_CPUPID_PGOFF * (LAST_CPUPID_WIDTH != 0))
 
 /* NODE:ZONE or SECTION:ZONE is used to ID a zone for the buddy allocator */
@@ -777,6 +777,9 @@ void do_set_pte(struct vm_area_struct *vma, unsigned long address,
 #define LAST_CPUPID_MASK	((1UL << LAST_CPUPID_SHIFT) - 1)
 #define ZONEID_MASK		((1UL << ZONEID_SHIFT) - 1)
 
+
+//ZONES_PGSHIFT = 30
+//(page->flags >> 30) & 0x03
 static inline enum zone_type page_zonenum(const struct page *page)
 {
 	return (page->flags >> ZONES_PGSHIFT) & ZONES_MASK;
@@ -930,6 +933,8 @@ static inline bool cpupid_match_pid(struct task_struct *task, int cpupid)
 }
 #endif /* CONFIG_NUMA_BALANCING */
 
+
+// 从page 返回 zone，有空研究研究
 static inline struct zone *page_zone(const struct page *page)
 {
 	return &NODE_DATA(page_to_nid(page))->node_zones[page_zonenum(page)];

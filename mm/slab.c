@@ -451,7 +451,7 @@ static inline void *index_to_obj(struct kmem_cache *cache, struct page *page,
 				 unsigned int idx)
 {
 	//cache->size = 24
-	return page->s_mem + cache->size * idx;
+	return page->s_mem + cache->size * idx;  // 指向对应的obj的位置
 }
 
 /*
@@ -570,8 +570,9 @@ static void cache_estimate(unsigned long gfporder, size_t buffer_size,
 
 	} else {
 		//计算为163
-		//slab_size = 4096.buffer_size = 24 想要分配的加aline，freelist_idx_t 每一个obj需要一个字节
-		nr_objs = calculate_nr_objs(slab_size, buffer_size,sizeof(freelist_idx_t), align);
+		//slab_size = 4096.buffer_size = 24
+		nr_objs = calculate_nr_objs(slab_size, buffer_size,
+					sizeof(freelist_idx_t), align);
 		mgmt_size = calculate_freelist_size(nr_objs, align); //168
 	}
 	*num = nr_objs;
@@ -699,7 +700,6 @@ static void init_arraycache(struct array_cache *ac, int limit, int batch)
 static struct array_cache *alloc_arraycache(int node, int entries,
 					    int batchcount, gfp_t gfp)
 {
-	//4 * 480+  16
 	size_t memsize = sizeof(void *) * entries + sizeof(struct array_cache);//1936
 	struct array_cache *ac = NULL;
 
@@ -821,7 +821,7 @@ static inline void ac_put_obj(struct kmem_cache *cachep, struct array_cache *ac,
 	if (unlikely(sk_memalloc_socks()))
 		objp = __ac_put_obj(cachep, ac, objp);  // 这里没跑
 
-	ac->entry[ac->avail++] = objp;// 在每个entry放入obj的地址，并且avail 不停的增加。
+	ac->entry[ac->avail++] = objp;// 在每个entry放入obj的地址，并且avail 不停的增加。把page中的每一个obj的地址放入这里
 }
 
 /*
@@ -1617,13 +1617,19 @@ static struct page *kmem_getpages(struct kmem_cache *cachep, gfp_t flags,
 		pfmemalloc_active = true;
 
 	nr_pages = (1 << cachep->gfporder);//这里是统计申请到的页数。
+
+	// 下面只是对统计情况做修改，可以不看，有时间再研究下
 	if (cachep->flags & SLAB_RECLAIM_ACCOUNT)
 		add_zone_page_state(page_zone(page),
 			NR_SLAB_RECLAIMABLE, nr_pages);
 	else
-		add_zone_page_state(page_zone(page),
+		add_zone_page_state(page_zone(page),   // 走的这里
 			NR_SLAB_UNRECLAIMABLE, nr_pages);
-	__SetPageSlab(page);   //在page-flags.h中定义
+
+			
+	__SetPageSlab(page);   //在page-flags.h中定义     PG_slab,//该页由slab创建，0x80
+
+	// 下面都没执行，直接返回了
 	if (page->pfmemalloc)
 		SetPageSlabPfmemalloc(page);
 
@@ -2023,7 +2029,7 @@ static struct array_cache __percpu *alloc_kmem_cache_cpus(
 	size_t size;
 	struct array_cache __percpu *cpu_cache;
 
-	//4 * 120 + 16
+	//4 * 120 +
 	//size= 496   为什么加了16
 	size = sizeof(void *) * entries + sizeof(struct array_cache);
 	// 这里很重要
@@ -2251,8 +2257,7 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 	if (FREELIST_BYTE_INDEX && size < SLAB_OBJ_MIN_SIZE)
 		size = ALIGN(SLAB_OBJ_MIN_SIZE, cachep->align);
 
-	// 计算slab的order 以及包含几个obj，size 是想要分配的大小20 再加上aline =24bytes
-	// left_over 是把obj以及freelist_size减去后，所剩于的字节，留给colour用
+	// 计算slab的order 以及包含几个obj，
 	left_over = calculate_slab_order(cachep, size, cachep->align, flags);
 //left_over = 16
 	if (!cachep->num)
@@ -2489,7 +2494,7 @@ static void *alloc_slabmgmt(struct kmem_cache *cachep,
 				   gfp_t local_flags, int nodeid)
 {
 	void *freelist;
-	void *addr = page_address(page);
+	void *addr = page_address(page);  //返回page的虚拟地址
 
 	/*如果slab管理区位于slab外，则在指定的slabp_cache中分配空间*/   // 这里没跑  
 	if (OFF_SLAB(cachep)) {
@@ -2499,15 +2504,17 @@ static void *alloc_slabmgmt(struct kmem_cache *cachep,
 		if (!freelist)
 			return NULL;
 	} else {/*slab管理区处于slab中*/  /*slab管理区从slab首部偏移颜色值的地方开始*/  
-		// 跑的这里
+		// 跑的这里，第一次colour_off = 0
 		freelist = addr + colour_off;     // offset在这里起的作用，freelist 指向freelist的头，跳过了colour
-		colour_off += cachep->freelist_size;
+		colour_off += cachep->freelist_size;  // 168
 	}
 	page->active = 0;
-	page->s_mem = addr + colour_off;//在这里指向第一个obj
+	page->s_mem = addr + colour_off;//在这里指向第一个obj,跳过了168个字节
 	return freelist;
 }
 
+
+// 根据 page->active 来得到 可用的obj，返回的是freelist_idx_t类型，也就是freelist中的数据，可以是0,1,2,3,4,
 static inline freelist_idx_t get_free_obj(struct page *page, unsigned int idx)
 {
 	return ((freelist_idx_t *)page->freelist)[idx];
@@ -2578,8 +2585,7 @@ static void kmem_flagcheck(struct kmem_cache *cachep, gfp_t flags)
 	}
 }
 
-static void *slab_get_obj(struct kmem_cache *cachep, struct page *page,
-				int nodeid)
+static void *slab_get_obj(struct kmem_cache *cachep, struct page *page,int nodeid)
 {
 	void *objp;
 
@@ -2686,12 +2692,12 @@ static int cache_grow(struct kmem_cache *cachep,
 
 	/* Get slab management. */
 	/*分配slab管理区*/  
-	freelist = alloc_slabmgmt(cachep, page, offset,
-			local_flags & ~GFP_CONSTRAINT_MASK, nodeid);
+	freelist = alloc_slabmgmt(cachep, page, offset,local_flags & ~GFP_CONSTRAINT_MASK, nodeid);
 	if (!freelist)
 		goto opps1;
 
-	/*建立页面到slab和cache的映射，以便于根据obj迅速定位slab描述符和cache描述符*/ 
+	/*建立页面到slab和cache的映射，以便于根据obj迅速定位slab描述符和cache描述符*/
+	// 下面两句话的描述貌似有点问题，我觉得是不对的
 	 //利用页描述结构的lru域建立页框到slab描述符和cache描述符的映射，
 	 //实际就是使lru.next指向cache描述符，lru.prev指向slab描述符
 	slab_map_pages(cachep, page, freelist);
@@ -2705,7 +2711,7 @@ static int cache_grow(struct kmem_cache *cachep,
 	spin_lock(&n->list_lock);
 
 	/* Make slab active. */
-	 /*将新创建的slab添加到free链表*/  
+	 /*将新创建的slab添加到kmem_cache的node的free链表*/  
 	list_add_tail(&page->lru, &(n->slabs_free));
 	STATS_INC_GROWN(cachep);
 	n->free_objects += cachep->num; // 163个free
@@ -2835,6 +2841,7 @@ retry:
 	/* See if we can refill from the shared array *///
 	//首先判断共享对象缓冲池中有没有空闲的对象。如果有，就迁移batchcount个空闲对象
 	// 到本地对象缓冲池中，第一次没有
+	// 我分析第一次n->shared 是有值得，但是transfer_objects 返回的是0
 	if (n->shared && transfer_objects(ac, n->shared, batchcount)) {
 		n->shared->touched = 1;
 		goto alloc_done;
@@ -2847,10 +2854,10 @@ retry:
 		/* Get slab alloc is to come from. */
 	// 这里逻辑还没看懂，是不是自己指向自己就表示空
 		entry = n->slabs_partial.next;
-		if (entry == &n->slabs_partial) {
-			n->free_touched = 1;
+		if (entry == &n->slabs_partial) {   // 判断slabs_partial链表是否为空
+			n->free_touched = 1; // 第一次进来了
 			entry = n->slabs_free.next;
-			if (entry == &n->slabs_free)
+			if (entry == &n->slabs_free)// 判断slabs_free链表是否为空
 				goto must_grow; //如果slabs_partial/slabs_free都为空，则跳到must_grow分配对象。
 		}
 		
@@ -2871,8 +2878,7 @@ retry:
 			STATS_INC_ACTIVE(cachep);
 			STATS_SET_HIGH(cachep);
 
-			ac_put_obj(cachep, ac, slab_get_obj(cachep, page,
-									node));
+			ac_put_obj(cachep, ac, slab_get_obj(cachep, page,node));  // 每次从page中取出一个obj放入array_cache 的entry[]中
 		}
 
 		/* move slabp to correct slabp list: */
@@ -3306,7 +3312,9 @@ slab_alloc(struct kmem_cache *cachep, gfp_t flags, unsigned long caller)
 
 	cache_alloc_debugcheck_before(cachep, flags);
 	local_irq_save(save_flags);
+	
 	objp = __do_cache_alloc(cachep, flags);
+	
 	local_irq_restore(save_flags);
 	objp = cache_alloc_debugcheck_after(cachep, flags, objp, caller);
 	kmemleak_alloc_recursive(objp, cachep->object_size, 1, cachep->flags,
@@ -3316,7 +3324,7 @@ slab_alloc(struct kmem_cache *cachep, gfp_t flags, unsigned long caller)
 	if (likely(objp)) {
 		kmemcheck_slab_alloc(cachep, flags, objp, cachep->object_size);
 		if (unlikely(flags & __GFP_ZERO))
-			memset(objp, 0, cachep->object_size);
+			memset(objp, 0, cachep->object_size);   // 清0
 	}
 
 	memcg_kmem_put_cache(cachep);
@@ -3675,7 +3683,9 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 			//分配共享对象缓冲池 为多核cpu之间共享空闲缓存对象
 			// 分配了 8 * 60 个 obj 的entry，注意这里只是分配entry还没分配obj
 			// 一个struct array_cache 头以及480个对象
-			new_shared = alloc_arraycache(node,cachep->shared*cachep->batchcount,0xbaadf00d, gfp);
+			new_shared = alloc_arraycache(node,
+				cachep->shared*cachep->batchcount,
+					0xbaadf00d, gfp);
 			if (!new_shared) {
 				free_alien_cache(new_alien);
 				goto fail;
@@ -3722,10 +3732,11 @@ static int alloc_kmem_cache_node(struct kmem_cache *cachep, gfp_t gfp)
 		n->next_reap = jiffies + REAPTIMEOUT_NODE +
 				((unsigned long)cachep) % REAPTIMEOUT_NODE;
 		n->shared = new_shared;// 分配的那8*60个共享的obj，都挂在这里
-		n->alien = new_alien;   //0
+		n->alien = new_alien;
 
 		// 283 = 2 * 60 + 163  这里是为什么
-		n->free_limit = (1 + nr_cpus_node(node)) * cachep->batchcount + cachep->num;
+		n->free_limit = (1 + nr_cpus_node(node)) *
+					cachep->batchcount + cachep->num;
 		// 赋值kmem_cache_node
 		cachep->node[node] = n;
 	}
@@ -3769,11 +3780,11 @@ static int __do_tune_cpucache(struct kmem_cache *cachep, int limit,
 	kick_all_cpus_sync();
 
 	check_irq_on();
-	cachep->batchcount = batchcount;  //60
-	cachep->limit = limit;   //120
-	cachep->shared = shared;   //8
+	cachep->batchcount = batchcount;
+	cachep->limit = limit;
+	cachep->shared = shared;
 
-	if (!prev)// 应该是空， 直接分配了
+	if (!prev)// 应该是空
 		goto alloc_node;
 
 	for_each_online_cpu(cpu) {

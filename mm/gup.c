@@ -66,6 +66,8 @@ retry:
 	}
 	if ((flags & FOLL_NUMA) && pte_protnone(pte))
 		goto no_page;
+
+	//如果分配掩码支持可写，但是pte表项只具有只读属性，返回null
 	if ((flags & FOLL_WRITE) && !pte_write(pte)) {
 		pte_unmap_unlock(ptep, ptl);
 		return NULL;

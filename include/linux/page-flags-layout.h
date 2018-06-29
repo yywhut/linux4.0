@@ -4,6 +4,7 @@
 #include <linux/numa.h>
 #include <generated/bounds.h>
 
+
 /*
  * When a memory allocation must conform to specific limitations (such
  * as being suitable for DMA) the caller will pass in hints to the
@@ -16,7 +17,7 @@
 #elif MAX_NR_ZONES <= 2
 #define ZONES_SHIFT 1
 #elif MAX_NR_ZONES <= 4
-#define ZONES_SHIFT 2
+#define ZONES_SHIFT 2       //走的这里
 #else
 #error ZONES_SHIFT -- too many zones configured adjust calculation
 #endif
@@ -44,13 +45,13 @@
  *      " plus space for last_cpupid: | SECTION | NODE | ZONE | LAST_CPUPID ... | FLAGS |
  * classic sparse no space for node:  | SECTION |     ZONE    | ... | FLAGS |
  */
-#if defined(CONFIG_SPARSEMEM) && !defined(CONFIG_SPARSEMEM_VMEMMAP)
+#if defined(CONFIG_SPARSEMEM) && !defined(CONFIG_SPARSEMEM_VMEMMAP)  // 没有定义
 #define SECTIONS_WIDTH		SECTIONS_SHIFT
 #else
 #define SECTIONS_WIDTH		0
 #endif
 
-#define ZONES_WIDTH		ZONES_SHIFT
+#define ZONES_WIDTH		ZONES_SHIFT   //2
 
 #if SECTIONS_WIDTH+ZONES_WIDTH+NODES_SHIFT <= BITS_PER_LONG - NR_PAGEFLAGS
 #define NODES_WIDTH		NODES_SHIFT

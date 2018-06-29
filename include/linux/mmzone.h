@@ -122,7 +122,7 @@ struct zone_padding {
 #define ZONE_PADDING(name)
 #endif
 
-enum zone_stat_item {
+enum zone_stat_item {  //这个结构体用于描述高速缓存页的使用。
 	/* First 128 byte cacheline (assuming 64 bit words) */
 	NR_FREE_PAGES,
 	NR_ALLOC_BATCH,

@@ -14,6 +14,7 @@
 #include <linux/page-flags-layout.h>
 #include <asm/page.h>
 #include <asm/mmu.h>
+find_vma
 
 #ifndef AT_VECTOR_SIZE_ARCH
 #define AT_VECTOR_SIZE_ARCH 0
@@ -317,7 +318,7 @@ struct vm_area_struct {
 	/* Second cache line starts here. */
 
 	struct mm_struct *vm_mm;	/* The address space we belong to. */
-	pgprot_t vm_page_prot;		/* Access permissions of this VMA. */
+	pgprot_t vm_page_prot;		/* Access permissions of this VMA. */// 访问权限
 	unsigned long vm_flags;		/* Flags, see mm.h. */
 
 	/*
@@ -336,7 +337,7 @@ struct vm_area_struct {
 	 * or brk vma (with NULL file) can only be in an anon_vma list.
 	 */
 
-	// 管理反向映射
+	// 下面两个管理反向映射
 	struct list_head anon_vma_chain; /* Serialized by mmap_sem &
 					  * page_table_lock */
 					  	
@@ -398,9 +399,24 @@ struct mm_rss_stat {
 };
 
 struct kioctx_table;
+
+
+
+/*
+该结构中get_unmapped_area函数用于在虚拟空间中获得未被映射的空间，
+mmap_base是上文中MMAP区域的基地址，task_size是进程地址空间的大小，
+start_code和end_code是进程代码段的起止地址，start_data和end_data是进程数据段
+的起止地址，start_brk和堆空间的起始地址，start_stack是栈空间的起始地址，
+brk表示堆区域当前的结束地址（为什么栈空间没有当前的结束地址呢？想想esp寄存器...），
+arg_start和arg_end表示进程参数列表，env_start和env_end表示环境变量，
+这两个区域都位于栈中最高的区域。
+*/
+
+//描述进程的
 struct mm_struct {
 	struct vm_area_struct *mmap;		/* list of VMAs */  //单链表，进程中所有的 都链接进来，注意是以vma的起始地址，按照递增的方式插入进来的
 	struct rb_root mm_rb;
+
 	u32 vmacache_seqnum;                   /* per-thread vmacache */
 #ifdef CONFIG_MMU
 	unsigned long (*get_unmapped_area) (struct file *filp,
@@ -437,9 +453,9 @@ struct mm_struct {
 	unsigned long exec_vm;		/* VM_EXEC & ~VM_WRITE */
 	unsigned long stack_vm;		/* VM_GROWSUP/DOWN */
 	unsigned long def_flags;
-	unsigned long start_code, end_code, start_data, end_data;
-	unsigned long start_brk, brk, start_stack;
-	unsigned long arg_start, arg_end, env_start, env_end;
+	unsigned long start_code, end_code, start_data, end_data;//代码段从start_code到end_code；数据段从start_data到end_data。
+	unsigned long start_brk, brk, start_stack;//堆从start_brk开始，brk表示堆的结束地址；栈从start_stack开始。
+	unsigned long arg_start, arg_end, env_start, env_end;//表示参数列表和环境变量的起始和结束地址，这两个区域都位于栈的最高区域。
 
 	unsigned long saved_auxv[AT_VECTOR_SIZE]; /* for /proc/PID/auxv */
 

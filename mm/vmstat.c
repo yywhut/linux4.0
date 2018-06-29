@@ -356,6 +356,7 @@ static inline void mod_state(struct zone *zone,
 		zone_page_state_add(z, zone, item);
 }
 
+// 这里没走
 void mod_zone_page_state(struct zone *zone, enum zone_stat_item item,
 					int delta)
 {
@@ -383,6 +384,8 @@ EXPORT_SYMBOL(dec_zone_page_state);
 /*
  * Use interrupt disable to serialize counter updates
  */
+
+// 走的这里
 void mod_zone_page_state(struct zone *zone, enum zone_stat_item item,
 					int delta)
 {

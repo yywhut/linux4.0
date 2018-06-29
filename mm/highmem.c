@@ -418,7 +418,7 @@ void *page_address(const struct page *page)
 	struct page_address_slot *pas;
 
 	if (!PageHighMem(page))
-		return lowmem_page_address(page);
+		return lowmem_page_address(page);  //slab分配时候进了这里
 
 	pas = page_slot(page);
 	ret = NULL;

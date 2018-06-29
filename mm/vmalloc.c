@@ -370,8 +370,7 @@ static struct vmap_area *alloc_vmap_area(unsigned long size,
 
 
 // 注意这里分配了一个va
-	va = kmalloc_node(sizeof(struct vmap_area),
-			gfp_mask & GFP_RECLAIM_MASK, node);
+	va = kmalloc_node(sizeof(struct vmap_area),gfp_mask & GFP_RECLAIM_MASK, node);
 	if (unlikely(!va))
 		return ERR_PTR(-ENOMEM);
 
@@ -417,7 +416,7 @@ nocache:
 	//而cached_hole_size是free_vmap_cache最大的空洞
 	
 	/* find starting point for our search */
-	if (free_vmap_cache) {
+	if (free_vmap_cache) {    // 第一次貌似这里都没跑，可以不用看了
 		first = rb_entry(free_vmap_cache, struct vmap_area, rb_node);
 		addr = ALIGN(first->va_end, align);//找到这个小区间的结束地址
 		if (addr < vstart) //结束地址都比开始地址小，那肯定不能用 
@@ -440,22 +439,22 @@ nocache:
  
 
 	*/
-		addr = ALIGN(vstart, align);
+		addr = ALIGN(vstart, align);  //  addr  =  0xf0000000
 		if (addr + size < addr)
 			goto overflow;
 
 		n = vmap_area_root.rb_node;
 		first = NULL;
 
-		// 返回起始地址最小的vmalloc区块
+		// 返回起始地址最小的vmalloc区块，实际上就是查找addr = 0xf0000000 到底在这个树上，是在哪个区间，
 		while (n) {
 			struct vmap_area *tmp;
 			tmp = rb_entry(n, struct vmap_area, rb_node);
-			if (tmp->va_end >= addr) {//找到一个结束地址大于需要映射的开始地址
+			if (tmp->va_end >= addr) {//找到一个结束地址大于需要映射的开始地址,而刚开始addr  =  0xf0000000小于end， 
 				first = tmp;
-				if (tmp->va_start <= addr)//这里就表明，起始地址在区域中间
+				if (tmp->va_start <= addr)//如果进到这里这里就表明，起始地址在区域中间
 					break;
-				n = n->rb_left;;//这里往叶子节点走，则分配地址更小的区域
+				n = n->rb_left;;//表明在上面这个区间的左边，所以这里往叶子节点走，则分配地址更小的区域
 			} else
 				n = n->rb_right;;//这边分配，则分配地址更大的区域
 		}
@@ -468,6 +467,9 @@ nocache:
 	/* from the starting point, walk areas until a suitable hole is found */
 	//0xf0000000 + 0x2000 > 0xf0000000  && 0xf0000000 + 0x2000 <= 0xff000000
 	// 这里如果while条件不满足，跳出就说明这个空洞的范围足够大，跟别的区间不重合。
+	// 这里很有特色的是，当first指向下一个区域比如0xf02c000 到 0xf02e1000的时候 addr还是
+	// 0xf0298000 也就是上一个区间的结束地址，这样当走到whiled的时候，
+	// 0xf0298000 + 0x2000 如果比 0xf02c000 还小，就说明空洞足够大了，就可以跳出循环了
 	while (addr + size > first->va_start && addr + size <= vend) {//这里是计算空洞地址是否足够
 		//从头开始找，
 		//cached_hole_size 运行的时候是0
@@ -479,7 +481,7 @@ nocache:
 			goto overflow;
 
 		if (list_is_last(&first->list, &vmap_area_list))//如果是最后一个区域，那接下来的都是空洞地址
-			goto found;
+			goto found;   // 我们的流程里不是因为走到这里才跳到found，而是 while不满足条件了，则那个addr就找到了
 
 		//找到下一个vmap_area,
 		first = list_entry(first->list.next,
@@ -490,6 +492,7 @@ found:
 	if (addr + size > vend)//看看是否超出vmalloc_end的界限
 		goto overflow;
 
+	// 找到区间后，start跟end就有了
 	va->va_start = addr;
 	va->va_end = addr + size;
 	va->flags = 0;
@@ -1382,13 +1385,12 @@ static struct vm_struct *__get_vm_area_node(unsigned long size,
 		size += PAGE_SIZE;  //程序跑了这里
 
 	//这个函数在整个vmalloc空间查找一个大小合适并没有使用的空间
-
 	va = alloc_vmap_area(size, align, start, end, node, gfp_mask);
 	if (IS_ERR(va)) {
 		kfree(area);
 		return NULL;
 	}
-// 把刚找到的区域信息填到vm中
+	// 把刚找到的区域信息填到vm中
 	setup_vmalloc_vm(area, va, flags, caller);
 
 	return area;
@@ -1622,8 +1624,7 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 	const gfp_t alloc_mask = gfp_mask | __GFP_NOWARN;   // 留意这里的分配mask
 
 	nr_pages = get_vm_area_size(area) >> PAGE_SHIFT;//去掉一个空洞页  1
-	array_size = (nr_pages * sizeof(struct page *));//数组大小   =4 
-
+	array_size = (nr_pages * sizeof(struct page *));//数组大小   =4 ，一个page需要4个字节，
 	area->nr_pages = nr_pages;;//实际映射的页数
 	
 	/* Please note that the recursion is strictly bounded. */
@@ -1706,8 +1707,7 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 		goto fail;
 
 	// 首先要分配区域
-	area = __get_vm_area_node(size, align, VM_ALLOC | VM_UNINITIALIZED |
-				vm_flags, start, end, node, gfp_mask, caller);
+	area = __get_vm_area_node(size, align, VM_ALLOC | VM_UNINITIALIZED |vm_flags, start, end, node, gfp_mask, caller);
 	if (!area)
 		goto fail;
 
@@ -1758,9 +1758,8 @@ static void *__vmalloc_node(unsigned long size, unsigned long align,
 			    int node, const void *caller)
 {
 
-	//0xf0000000  0xff000000，一共240M
-	return __vmalloc_node_range(size, align, VMALLOC_START, VMALLOC_END,
-				gfp_mask, prot, 0, node, caller);
+	//VMALLOC_START = 0xf0000000  VMALLOC_END = 0xff000000，一共240M
+	return __vmalloc_node_range(size, align, VMALLOC_START, VMALLOC_END,gfp_mask, prot, 0, node, caller);
 }
 
 void *__vmalloc(unsigned long size, gfp_t gfp_mask, pgprot_t prot)
@@ -1773,8 +1772,7 @@ EXPORT_SYMBOL(__vmalloc);
 static inline void *__vmalloc_node_flags(unsigned long size,
 					int node, gfp_t flags)
 {
-	return __vmalloc_node(size, 1, flags, PAGE_KERNEL,
-					node, __builtin_return_address(0));
+	return __vmalloc_node(size, 1, flags, PAGE_KERNEL,node, __builtin_return_address(0));
 }
 
 /**
@@ -1789,8 +1787,7 @@ static inline void *__vmalloc_node_flags(unsigned long size,
 void *vmalloc(unsigned long size)
 {
 	// 说明优先从内核高端内存分配
-	return __vmalloc_node_flags(size, NUMA_NO_NODE,
-				    GFP_KERNEL | __GFP_HIGHMEM);
+	return __vmalloc_node_flags(size, NUMA_NO_NODE,GFP_KERNEL | __GFP_HIGHMEM);
 }
 EXPORT_SYMBOL(vmalloc);
 

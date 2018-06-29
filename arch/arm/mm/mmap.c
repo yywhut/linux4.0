@@ -183,7 +183,7 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
 		mm->get_unmapped_area = arch_get_unmapped_area;
 	} else {
 		mm->mmap_base = mmap_base(random_factor);
-		mm->get_unmapped_area = arch_get_unmapped_area_topdown;
+		mm->get_unmapped_area = arch_get_unmapped_area_topdown;  // 留意这里
 	}
 }
 

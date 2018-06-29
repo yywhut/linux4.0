@@ -6,6 +6,7 @@
  * Address space accounting code	<alan@lxorguk.ukuu.org.uk>
  */
  sys_mmap_pgoff
+ malloc
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -292,7 +293,6 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 	unsigned long min_brk;
 	bool populate;
 	//写信号量获取操作, 得到读写信号量sem, 将直接将文件映射到内存 
-
 	down_write(&mm->mmap_sem);
 
 #ifdef CONFIG_COMPAT_BRK
@@ -304,11 +304,11 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 	if (current->brk_randomized)
 		min_brk = mm->start_brk;
 	else
-		min_brk = mm->end_data;
+		min_brk = mm->end_data;  //确定堆空间的起始地址min_brk
 #else
 	min_brk = mm->start_brk;
 #endif
-	if (brk < min_brk)
+	if (brk < min_brk)    //brk地址不合法，在数据段
 		goto out;
 
 	/*
@@ -317,16 +317,16 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 	 * segment grow beyond its set limit the in case where the limit is
 	 * not page aligned -Ram Gupta
 	 */
+	 //如果RLIMIT_DATA不是RLIM_INFINITY，需要保证数据段加上brk区域不超过RLIMIT_DATA。
 	if (check_data_rlimit(rlimit(RLIMIT_DATA), brk, mm->start_brk,
 			      mm->end_data, mm->start_data))
 		goto out;
 
 
-	  /*newbrk由参数brk对齐得到，代表希望的堆地址
-
+	 /*newbrk由参数brk对齐得到，代表希望的堆地址
      //oldbrk由当前堆地址mm->brk得到，代表现在的堆地址*/
 	newbrk = PAGE_ALIGN(brk);
-	oldbrk = PAGE_ALIGN(mm->brk);
+	oldbrk = PAGE_ALIGN(mm->brk);  //页对齐
 	if (oldbrk == newbrk)
 		goto set_brk;
 
@@ -353,20 +353,22 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 
 	/* Check against existing mmap mappings. */
 	//判断进程的地址空间是否与给定的地址区间相交叉
+	//查找一块VMA包含start_addr的VMA，说明老边界开始的地址空间已经在使用了，就不需要再寻找了。
 	if (find_vma_intersection(mm, oldbrk, newbrk+PAGE_SIZE))
 		goto out;
 
 	/*扩大堆*/
 	/* Ok, looks good - let it rip. */
-	if (do_brk(oldbrk, newbrk-oldbrk) != oldbrk)
+	//do_brk仅进行匿名映射，申请从addr开始len大小的虚拟地址空间。
+	if (do_brk(oldbrk, newbrk-oldbrk) != oldbrk)//申请虚拟地址空间
 		goto out;
 
 set_brk:
 	mm->brk = brk;
-	populate = newbrk > oldbrk && (mm->def_flags & VM_LOCKED) != 0;
+	populate = newbrk > oldbrk && (mm->def_flags & VM_LOCKED) != 0;  //判断flags中是否有VM_LOCKED，通常由mlockall设置。
 	up_write(&mm->mmap_sem);
 	if (populate)
-		mm_populate(oldbrk, newbrk - oldbrk);
+		mm_populate(oldbrk, newbrk - oldbrk);//立即分配物理页面
 	return brk;
 
 out:
@@ -1048,6 +1050,8 @@ can_vma_merge_after(struct vm_area_struct *vma, unsigned long vm_flags,
  * Odd one out? Case 8, because it extends NNNN but needs flags of XXXX:
  * mprotect_fixup updates vm_flags & vm_page_prot on successful return.
  */
+
+	// 返回指针表示可以合并，返回null表示不能合并
 struct vm_area_struct *vma_merge(struct mm_struct *mm,
 			struct vm_area_struct *prev, unsigned long addr,
 			unsigned long end, unsigned long vm_flags,
@@ -1963,6 +1967,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
  */
 #ifndef HAVE_ARCH_UNMAPPED_AREA_TOPDOWN
 unsigned long
+// 跑的这里
 arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 			  const unsigned long len, const unsigned long pgoff,
 			  const unsigned long flags)
@@ -1985,7 +1990,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 		vma = find_vma(mm, addr);
 		if (TASK_SIZE - len >= addr && addr >= mmap_min_addr &&
 				(!vma || addr + len <= vma->vm_start))
-			return addr;
+			return addr;  // 貌似充这里返回了  Hex:0x99000
 	}
 
 	info.flags = VM_UNMAPPED_AREA_TOPDOWN;
@@ -2035,14 +2040,14 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 	if (IS_ERR_VALUE(addr))
 		return addr;
 
-	if (addr > TASK_SIZE - len)
+	if (addr > TASK_SIZE - len)  //这都没执行
 		return -ENOMEM;
 	if (addr & ~PAGE_MASK)
 		return -EINVAL;
 
 	addr = arch_rebalance_pgtables(addr, len);
 	error = security_mmap_addr(addr);
-	return error ? error : addr;
+	return error ? error : addr;   //error 为0 这里返回addr
 }
 
 EXPORT_SYMBOL(get_unmapped_area);
@@ -2056,6 +2061,12 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 	struct vm_area_struct *vma;
 
 	/* Check the cache first. */
+
+	/* vmacache_ find () 是内核中最近出现的一个查找V M A 的优化方法，在 task _ 
+	struct 结构中，有一个存放最近访问过的V M A 的 数组vmacache[ V M A C A C H E _ SIZE]，其中
+	可以存放4 个最近使用的V M A ，充分利用了局部性原理。如果在 v m a c a c h e 中没找到V M A ，
+	那么遍历这个用户进程的m m _r b 红黑树，这个红黑树存放着该用户进程所有的V M A 。
+	*/
 	vma = vmacache_find(mm, addr);
 	if (likely(vma))
 		return vma;
@@ -2075,9 +2086,9 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 
 		if (tmp->vm_end > addr) {
 			vma = tmp;
-			if (tmp->vm_start <= addr)
+			if (tmp->vm_start <= addr)  // 这里就表示addr在这个vma中间了
 				break;
-			rb_node = rb_node->rb_left;
+			rb_node = rb_node->rb_left;// 否则取左边的
 		} else
 			rb_node = rb_node->rb_right;
 	}
@@ -2738,6 +2749,8 @@ static inline void verify_mm_writelocked(struct mm_struct *mm)
  *  anonymous maps.  eventually we may be able to do some
  *  brk-specific accounting here.
  */
+ //do_brk仅进行匿名映射，申请从addr开始len大小的虚拟地址空间。
+ //do_brk首先判断虚拟地址空间是否足够，然后查找VMA插入点，并判断是否能够进行VMA合并。如果找不到VMA插入点，则新建一个VMA，并更新到mm->mmap中。
 static unsigned long do_brk(unsigned long addr, unsigned long len)
 {
 	struct mm_struct *mm = current->mm;
@@ -2758,11 +2771,12 @@ static unsigned long do_brk(unsigned long addr, unsigned long len)
 	本函数就是用于查找没有映射过的内存区，找到后返回这个区间的起始地址addr*/
 
 	// 笨叔叔：判断虚拟内存空间是否有足够的空间，返回一段没有映射过的空间的起始地址，会调用到具体的体系结构
+	//从arch_pick_mmap_layout中可知，current->mm->get_ummapped_area对应的是arch_get_unmapped_area_topdown。
 	error = get_unmapped_area(NULL, addr, len, 0, MAP_FIXED);
 	if (error & ~PAGE_MASK)
 		return error;
 
-	error = mlock_future_check(mm, mm->def_flags, len);
+	error = mlock_future_check(mm, mm->def_flags, len);//没有锁住
 	if (error)
 		return error;
 
@@ -2770,14 +2784,15 @@ static unsigned long do_brk(unsigned long addr, unsigned long len)
 	 * mm->mmap_sem is required to protect against another thread
 	 * changing the mappings in case we sleep.
 	 */
-	verify_mm_writelocked(mm);
+	verify_mm_writelocked(mm);  // 没啥
 
 	/*
 	 * Clear old maps.  this also does some error checking for us
 	 */
  munmap_back:
+ 			//	addr ：Hex:0x99000		len:Hex:0x1000 也就是一个page
 	if (find_vma_links(mm, addr, addr + len, &prev, &rb_link, &rb_parent)) {
-		if (do_munmap(mm, addr, len))
+		if (do_munmap(mm, addr, len))  // 没有执行，
 			return -ENOMEM;
 		goto munmap_back;
 	}
@@ -2795,12 +2810,14 @@ static unsigned long do_brk(unsigned long addr, unsigned long len)
 	/* Can we just expand an old private anonymous mapping? */
 	vma = vma_merge(mm, prev, addr, addr + len, flags,
 					NULL, NULL, pgoff, NULL);
-	if (vma)
+	if (vma)  // 这里返回了
 		goto out;
 
 	/*
 	 * create a vma struct for an anonymous mapping
 	 */
+
+	//如果没办法合并，只能新创建一个VMA，VMA地址空间是[addr, addr+len]。
 	vma = kmem_cache_zalloc(vm_area_cachep, GFP_KERNEL);
 	if (!vma) {
 		vm_unacct_memory(len >> PAGE_SHIFT);
@@ -3015,7 +3032,7 @@ int may_expand_vm(struct mm_struct *mm, unsigned long npages)
 
 	if (cur + npages > lim)
 		return 0;
-	return 1;
+	return 1;   // 返回这里
 }
 
 static int special_mapping_fault(struct vm_area_struct *vma,
