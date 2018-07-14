@@ -198,6 +198,8 @@ extern void pmdp_invalidate(struct vm_area_struct *vma, unsigned long address,
 #endif
 
 #ifndef __HAVE_ARCH_PTE_SAME
+
+//// 相当返回1，不等返回0
 static inline int pte_same(pte_t pte_a, pte_t pte_b)
 {
 	return pte_val(pte_a) == pte_val(pte_b);

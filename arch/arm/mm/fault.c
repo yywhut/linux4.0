@@ -242,7 +242,7 @@ good_area:// 判断vma是否具有可写属性
 		fault = VM_FAULT_BADACCESS;
 		goto out;
 	}
-
+	// mm/memory.c
 	return handle_mm_fault(mm, vma, addr & PAGE_MASK, flags); // 核心函数
 
 check_stack:
@@ -361,6 +361,7 @@ retry:
 	 * If we are in kernel mode at this point, we
 	 * have no context to handle this fault with.
 	 */
+	 // 如果当前处于内核模式，则跳转到__do_kernel_fault处理
 	if (!user_mode(regs))
 		goto no_context;
 

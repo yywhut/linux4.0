@@ -761,19 +761,20 @@ static void print_bad_pte(struct vm_area_struct *vma, unsigned long addr,
  *
  */
 #ifdef __HAVE_ARCH_PTE_SPECIAL
-# define HAVE_PTE_SPECIAL 1
+# define HAVE_PTE_SPECIAL 1  // arm 32 3级页表或者arm 64 才会走这里 
 #else
-# define HAVE_PTE_SPECIAL 0
+# define HAVE_PTE_SPECIAL 0// 走的这里
 #endif
 
 
 //查找addr对应页面的page结构
-
+//  这个函数可以区分是norma mapping的页面还是 special mapping的页面
 struct page *vm_normal_page(struct vm_area_struct *vma, unsigned long addr,
 				pte_t pte)
 {
 	unsigned long pfn = pte_pfn(pte);
 
+	 // 在arm32架构的三级页表以及arm64中会有这个宏
 	if (HAVE_PTE_SPECIAL) {
 		if (likely(!pte_special(pte)))// 如果比特位没有置位
 			goto check_pfn;
@@ -2041,10 +2042,10 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	struct mem_cgroup *memcg;
 
 	
-	//查找addr对应页面的page结构
-
+	//查找缺页异常地址addr对应页面的page结构
 	old_page = vm_normal_page(vma, address, orig_pte);
 
+	//考虑可写且共享的special页面，
 	// 如果返回空，表明这是一个 special mapping的页面
 	// 如果VMA的的属性是可写且共享的，那吗跳转到reuse，会继续使用这个页面，不做写时复制操作
 	//否则跳到gotten，会分配一个新的页面进行写时复制操作
@@ -2057,9 +2058,10 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		 * Just mark the pages writable as we can't do any dirty
 		 * accounting on raw pfn maps.
 		 */
-		if ((vma->vm_flags & (VM_WRITE|VM_SHARED)) ==
-				     (VM_WRITE|VM_SHARED))
+		 // 可写共享页面
+		if ((vma->vm_flags & (VM_WRITE|VM_SHARED)) ==(VM_WRITE|VM_SHARED))
 			goto reuse;
+		//只读或非共享文件映射页面
 		goto gotten;
 	}
 
@@ -2069,6 +2071,7 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	 */
 	 //判断当前页面是否为不属于KSM的匿名页面，利用page->mapping成员的最低2个比特位来
 	 //判断匿名页面使用PageAnon 宏。
+	 // 是匿名页面且不是KSM页面，
 	if (PageAnon(old_page) && !PageKsm(old_page)) {
 		if (!trylock_page(old_page)) {//判断当前的page是否已经加锁，false说明被别的进程加锁
 			page_cache_get(old_page);// 增加count计数
@@ -2082,7 +2085,7 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 			}
 			page_cache_release(old_page);
 		}
-		//判断old_page页面是否只有一个进程映射匿名页面。
+		//判断old_page页面是否只有一个进程映射匿名页面。单身匿名页面
 		if (reuse_swap_page(old_page)) {
 			/*
 			 * The page is all ours.  Move it to our anon_vma so
@@ -2097,6 +2100,7 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	} 
 
 	// 这之后只剩下page cache与 KSM页面了
+	//
 	else if (unlikely((vma->vm_flags & (VM_WRITE|VM_SHARED)) ==(VM_WRITE|VM_SHARED))) {
 		page_cache_get(old_page);
 		/*
@@ -2632,14 +2636,16 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		return VM_FAULT_SIGSEGV;
 
 // 根据flags是否需要可写权限，代码分为两部分
-	/* Use the zero-page for reads */
+
+
+	/* Use the zero-page for reads */ // 如果属性是只读的，就用zero page 来分配
 	if (!(flags & FAULT_FLAG_WRITE) && !mm_forbids_zeropage(mm)) {
 		entry = pte_mkspecial(pfn_pte(my_zero_pfn(address),
 						vma->vm_page_prot));
 		page_table = pte_offset_map_lock(mm, pmd, address, &ptl);
 		if (!pte_none(*page_table))
-			goto unlock;
-		goto setpte;
+			goto unlock;   // 如果pte表项为空
+		goto setpte;  // 如果不为空，则跳过去设置到硬件中
 	}
 
 // 如果属性可写，
@@ -2710,7 +2716,7 @@ static int __do_fault(struct vm_area_struct *vma, unsigned long address,
 	vmf.page = NULL;
 	vmf.cow_page = cow_page;
 	
-	// 读取文件内容到fault_page中
+	// 新建一个page cache
 	ret = vma->vm_ops->fault(vma, &vmf);
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
 		return ret;
@@ -2892,6 +2898,8 @@ static int do_read_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	 * if page by the offset is not ready to be mapped (cold cache or
 	 * something).
 	 */
+
+	//fault_around_bytes 定义在  mm/memory.c中，默认是65536块，也就是16k
 	 //  在错误地址周围16k的范围内建立映射
 	if (vma->vm_ops->map_pages && fault_around_bytes >> PAGE_SHIFT > 1) {
 		pte = pte_offset_map_lock(mm, pmd, address, &ptl);//找到pte的地址并且获得一个锁
@@ -2901,10 +2909,13 @@ static int do_read_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		pte_unmap_unlock(pte, ptl);
 	}
 
+	// 真正为异常地址分配page_cache 是在这里
 	ret = __do_fault(vma, address, pgoff, flags, NULL, &fault_page);
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
 		return ret;
 
+	//重新读取当前缺页异常地址addr对应pte的值与以前读出来的是否一致，如果不一致，说明
+	// 这期间有人修改了pte，那么刚才通过__do_fault分配的页面就没用了
 	pte = pte_offset_map_lock(mm, pmd, address, &ptl);
 	if (unlikely(!pte_same(*pte, orig_pte))) {
 		pte_unmap_unlock(pte, ptl);
@@ -2912,6 +2923,7 @@ static int do_read_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		page_cache_release(fault_page);
 		return ret;
 	}
+	//用刚才分配的页面生成新的pteentry设置到硬件
 	do_set_pte(vma, address, fault_page, pte, false, false);
 	unlock_page(fault_page);
 unlock_out:
@@ -2933,6 +2945,7 @@ static int do_cow_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	if (unlikely(anon_vma_prepare(vma)))
 		return VM_FAULT_OOM;
 
+	//优先使用高端内存分配一个page
 	new_page = alloc_page_vma(GFP_HIGHUSER_MOVABLE, vma, address);
 	if (!new_page)
 		return VM_FAULT_OOM;
@@ -2973,6 +2986,7 @@ static int do_cow_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	// 设置硬件表
 	do_set_pte(vma, address, new_page, pte, true, true);
 	mem_cgroup_commit_charge(new_page, memcg, false);
+	//加入LRU
 	lru_cache_add_active_or_unevictable(new_page, vma);
 	pte_unmap_unlock(pte, ptl);
 	if (fault_page) {
@@ -3026,6 +3040,7 @@ static int do_shared_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		}
 	}
 
+	// 还是判断页表有咩有变化
 	pte = pte_offset_map_lock(mm, pmd, address, &ptl);
 	if (unlikely(!pte_same(*pte, orig_pte))) {
 		pte_unmap_unlock(pte, ptl);
@@ -3033,6 +3048,7 @@ static int do_shared_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		page_cache_release(fault_page);
 		return ret;
 	}
+	// 设置pte
 	do_set_pte(vma, address, fault_page, pte, true, false);
 	pte_unmap_unlock(pte, ptl);
 
@@ -3074,14 +3090,18 @@ static int do_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	pgoff_t pgoff = (((address & PAGE_MASK)
 			- vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
 
-	pte_unmap(page_table);
-	if (!(flags & FAULT_FLAG_WRITE))//只读异常
+	pte_unmap(page_table);
+	//根据VMA中的vm_ops操作函数集李定义的fault函数指针的情况，分为三种情况	
+	//1只读异常
+	if (!(flags & FAULT_FLAG_WRITE))
 		return do_read_fault(mm, vma, address, pmd, pgoff, flags,
 				orig_pte);
-	if (!(vma->vm_flags & VM_SHARED))// 私有映射且发生了写时复制COW
+	// 2私有映射且发生了写时复制COW
+	if (!(vma->vm_flags & VM_SHARED))
 		return do_cow_fault(mm, vma, address, pmd, pgoff, flags,
 				orig_pte);
-	return do_shared_fault(mm, vma, address, pmd, pgoff, flags, orig_pte);//在共享映射中发生了写缺页异常
+	//3:在共享映射中发生了写缺页异常
+	return do_shared_fault(mm, vma, address, pmd, pgoff, flags, orig_pte);
 }
 
 static int numa_migrate_prep(struct page *page, struct vm_area_struct *vma,
@@ -3217,12 +3237,13 @@ static int handle_pte_fault(struct mm_struct *mm,
 	 * a barrier will do.
 	 */
 	entry = *pte;
-	barrier();
+	barrier();//需要一个内存屏障，保证读取到pte的正确性，因为有的处理器pte是8字节
 
-	// 页面不在内存中，判断这个标志没有置为，是真正的缺页
+	// 第一种情况
+	// 页面不在内存中，判断这个标志没有置位，是真正的缺页，此时还没有映射物理页面
 	if (!pte_present(entry)) {
 		if (pte_none(entry)) {// 如果pte为空
-			if (vma->vm_ops) {// 对于文件映射
+			if (vma->vm_ops) {// 对于文件映射，通常VMA的vma->vm_ops定义了fault函数指针，可以调用
 				if (likely(vma->vm_ops->fault))
 					return do_fault(mm, vma, address, pte,
 							pmd, flags, entry);
@@ -3230,30 +3251,38 @@ static int handle_pte_fault(struct mm_struct *mm,
 			return do_anonymous_page(mm, vma, address,// 对于匿名映射
 						 pte, pmd, flags);
 		}
-		return do_swap_page(mm, vma, address,// 如果不是上述，说明文件被交换到swap分区
+		// 如果pte不为空，但是present没有置位，说明该页被交换到swap分区
+		return do_swap_page(mm, vma, address,
 					pte, pmd, flags, entry);
 	}
 
+	// 这里好像没用到
 	if (pte_protnone(entry))
 		return do_numa_page(mm, vma, address, entry, pte, pmd);
 
-//pte有映射物理页面，但是之前pte设置了只读，这里由于写操作触发了写时复制缺页中断，例如父子进程
-//之间共享的内存
+	
+	// 第二种情况
+	//pte有映射物理页面，但是之前pte设置了只读，这里由于写操作触发了写时复制缺页中断，
+	//例如父子进程之间共享的内存
 	ptl = pte_lockptr(mm, pmd);
 	spin_lock(ptl);
+	
 	if (unlikely(!pte_same(*pte, entry)))
 		goto unlock;
+	
 	if (flags & FAULT_FLAG_WRITE) {// 如果flag设置了可写的属性
 		if (!pte_write(entry))//当前pte是只读的
-			return do_wp_page(mm, vma, address,
-					pte, pmd, ptl, entry);
+		//处理那些用户试图修改pte页表没有可写属性的页面，新分配一个页面并且复制
+		//旧页面到新的页面中，也就是写时复制
+			return do_wp_page(mm, vma, address,pte, pmd, ptl, entry);
+		
 		entry = pte_mkdirty(entry);//如果当前pte是可写的，那就来设置 L_PTE_DIRTY比特位
-						// 什么时候会进入这个case？
+						// 什么时候会进入这个case？页在内存中，且pte具有可写属性
 	}
 
 
 
-	
+	//第三部分对硬件pte的操作
 	entry = pte_mkyoung(entry);
 	if (ptep_set_access_flags(vma, address, pte, entry, flags & FAULT_FLAG_WRITE)) {
 		update_mmu_cache(vma, address, pte);
@@ -3364,6 +3393,7 @@ static int __handle_mm_fault(struct mm_struct *mm, struct vm_area_struct *vma,
  * The mmap_sem may have been released depending on flags and our
  * return value.  See filemap_fault() and __lock_page_or_retry().
  */
+ // 走的这里
 int handle_mm_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		    unsigned long address, unsigned int flags)
 {

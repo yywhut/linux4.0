@@ -545,6 +545,7 @@ static inline void get_page(struct page *page)
 	 * Getting a normal page or the head of a compound page
 	 * requires to already have an elevated page->_count.
 	 */
+	 //判断页面_count值不能小于等于0，因为伙伴系统分配好的页面初始值位1。
 	VM_BUG_ON_PAGE(atomic_read(&page->_count) <= 0, page);
 	atomic_inc(&page->_count);
 }
@@ -1029,7 +1030,7 @@ void page_address_init(void);
  * address_space which maps the page from disk; whereas "page_mapped"
  * refers to user virtual address space into which the page is mapped.
  */
-#define PAGE_MAPPING_ANON	1
+#define PAGE_MAPPING_ANON	1  //匿名页面
 #define PAGE_MAPPING_KSM	2
 #define PAGE_MAPPING_FLAGS	(PAGE_MAPPING_ANON | PAGE_MAPPING_KSM)
 
@@ -1052,6 +1053,7 @@ struct address_space *page_file_mapping(struct page *page)
 	return page->mapping;
 }
 
+// 判断是否是匿名页面
 static inline int PageAnon(struct page *page)
 {
 	return ((unsigned long)page->mapping & PAGE_MAPPING_ANON) != 0;
@@ -1096,6 +1098,7 @@ static inline int page_mapped(struct page *page)
  * just gets major/minor fault counters bumped up.
  */
 
+// vm fault 的出错 标志
 #define VM_FAULT_MINOR	0 /* For backwards compat. Remove me quickly. */
 
 #define VM_FAULT_OOM	0x0001

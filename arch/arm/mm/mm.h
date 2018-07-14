@@ -39,11 +39,11 @@ static inline pmd_t *pmd_off_k(unsigned long virt)
 }
 
 struct mem_type {
-	pteval_t prot_pte;
-	pteval_t prot_pte_s2;
-	pmdval_t prot_l1;
-	pmdval_t prot_sect;
-	unsigned int domain;
+	pteval_t prot_pte; // PTE属性
+	pteval_t prot_pte_s2;  //定义CONFIG_ARM_LPAE才有效
+	pmdval_t prot_l1;  //PMD属性
+	pmdval_t prot_sect;   //Section类型映射
+	unsigned int domain;  //定义ARM中不同的域
 };
 
 const struct mem_type *get_mem_type(unsigned int type);

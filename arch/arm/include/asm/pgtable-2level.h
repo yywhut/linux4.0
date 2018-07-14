@@ -121,9 +121,9 @@
 // 前缀表示强制转化这个类型
 //((pteval_t)(1) << 1)  其实就是1 << 1  然后强制转化成 pteval_t类型
 #define L_PTE_VALID		(_AT(pteval_t, 1) << 0)		/* Valid */
-#define L_PTE_PRESENT		(_AT(pteval_t, 1) << 0)
-#define L_PTE_YOUNG		(_AT(pteval_t, 1) << 1)
-#define L_PTE_DIRTY		(_AT(pteval_t, 1) << 6)
+#define L_PTE_PRESENT		(_AT(pteval_t, 1) << 0)  //页是否在内存中
+#define L_PTE_YOUNG		(_AT(pteval_t, 1) << 1) //页表项是否表示最近没有被访问过
+#define L_PTE_DIRTY		(_AT(pteval_t, 1) << 6)  //页表项是否为脏
 #define L_PTE_RDONLY		(_AT(pteval_t, 1) << 7)
 #define L_PTE_USER		(_AT(pteval_t, 1) << 8)
 #define L_PTE_XN		(_AT(pteval_t, 1) << 9)

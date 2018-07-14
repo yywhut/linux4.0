@@ -73,7 +73,7 @@ retry:
 		return NULL;
 	}
 
-	page = vm_normal_page(vma, address, pte);// 返回page数据结构
+	page = vm_normal_page(vma, address, pte);// 返回normal mapping的page数据结构
 	if (unlikely(!page)) {
 		if ((flags & FOLL_DUMP) ||
 		    !is_zero_pfn(pte_pfn(pte)))
@@ -82,7 +82,8 @@ retry:
 	}
 
 	if (flags & FOLL_GET)
-		get_page_foll(page);
+		get_page_foll(page);// 增加page的_count 计数
+	
 	if (flags & FOLL_TOUCH) {
 		if ((flags & FOLL_WRITE) &&
 		    !pte_dirty(pte) && !PageDirty(page))
@@ -92,7 +93,7 @@ retry:
 		 * is needed to avoid losing the dirty bit: it is easier to use
 		 * mark_page_accessed().
 		 */
-		mark_page_accessed(page);
+		mark_page_accessed(page);// 标记page可访问
 	}
 	if ((flags & FOLL_MLOCK) && (vma->vm_flags & VM_LOCKED)) {
 		/*
@@ -477,8 +478,7 @@ retry:
 		page = follow_page_mask(vma, start, foll_flags, &page_mask);
 		if (!page) {
 			int ret;
-			ret = faultin_page(tsk, vma, start, &foll_flags,
-					nonblocking);  //  人为触发缺页中断
+			ret = faultin_page(tsk, vma, start, &foll_flags,nonblocking); //  人为触发缺页中断
 			switch (ret) {
 			case 0:
 				goto retry;

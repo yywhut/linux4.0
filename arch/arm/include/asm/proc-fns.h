@@ -86,6 +86,8 @@ extern void cpu_do_switch_mm(phys_addr_t pgd_phys, struct mm_struct *mm);
 #ifdef CONFIG_ARM_LPAE
 extern void cpu_set_pte_ext(pte_t *ptep, pte_t pte);
 #else
+//ptep 只要写入的页面表项的地址，也就是linux的页面表项地址，，pte只要写入的数据，linux的表项内容
+// 这个函数其实主要还是根据linux表项数据填充硬件表项数据
 extern void cpu_set_pte_ext(pte_t *ptep, pte_t pte, unsigned int ext);
 #endif
 extern void cpu_reset(unsigned long addr) __attribute__((noreturn));

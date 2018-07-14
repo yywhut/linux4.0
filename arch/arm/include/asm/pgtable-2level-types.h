@@ -42,7 +42,9 @@ typedef struct { pteval_t pgprot; } pgprot_t;
 
 #define __pte(x)        ((pte_t) { (x) } )
 #define __pmd(x)        ((pmd_t) { (x) } )
-#define __pgprot(x)     ((pgprot_t) { (x) } )
+
+// 留意这里强制转化成了结构体，这样上面就可以用x.的形式了
+#define __pgprot(x)     ((pgprot_t) { (x) } )  //其实这里就是为了位数来做的处理，32位就返回32,64就返回64
 
 #else
 /*

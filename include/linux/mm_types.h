@@ -136,7 +136,7 @@ struct page {
 					 * never succeed on tail
 					 * pages.
 					 */
-					atomic_t _mapcount;  //页映射计数器， 初始化的时候被设定成-1
+					atomic_t _mapcount;  //页映射计数器， 初始化的时候被设定成-1，每当页被映射的时候都会加加
 
 					struct { /* SLUB */
 						unsigned inuse:16;
