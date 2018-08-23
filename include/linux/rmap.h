@@ -25,7 +25,12 @@
  * pointing to this anon_vma once its vma list is empty.
  */
 struct anon_vma {
+
+	/* 指向此anon_vma所属的root */
+	//root指针指向此anon_vma的root(并不是指向其所属的vma)
+
 	struct anon_vma *root;		/* Root of this anon_vma tree */ //数据结构根节点
+	 /* 读写信号量 */
 	struct rw_semaphore rwsem;	/* W: modification, R: walking the list */// 保护链表的读写信号量
 	/*
 	 * The refcount is taken on an anon_vma when there is no
@@ -34,6 +39,8 @@ struct anon_vma {
 	 * the reference is responsible for clearing up the
 	 * anon_vma if they are the last user on release
 	 */
+
+	/* 红黑树中结点数量，初始化时为1，也就是只有本结点，当加入root的anon_vma的红黑树时，此值不变 */
 	atomic_t refcount;// 引用计数
 
 	/*
@@ -54,6 +61,8 @@ struct anon_vma {
 	 * is serialized by a system wide lock only visible to
 	 * mm_take_all_locks() (mm_all_locks_mutex).
 	 */
+	 /* 红黑树的根，用于存放引用了此anon_vma所属线性区中的页的其他线性区，用于匿名页反向映射 */
+	//红黑树时用于将不同进程的anon_vma_chain加入进来
 	struct rb_root rb_root;	/* Interval tree of private "related" vmas */  
 };
 
@@ -73,10 +82,17 @@ struct anon_vma {
 
 // 连接父子进程的枢纽
 struct anon_vma_chain {
-	struct vm_area_struct *vma;// 可能指向父进程也可能指向子进程
+
+	/* 此结构所属的vma */
+
+	struct vm_area_struct *vma;// 可能指向父进程也可能指向子进程,在父进程中是指向父进程的vma，子进程是指向子进程的vma
 	struct anon_vma *anon_vma;// 可能指向父进程也可能指向子进程
+
+	/* 用于加入到所属vma的anon_vma_chain链表中 */
 	struct list_head same_vma;   /* locked by mmap_sem & page_table_lock *///通常会加入vma->anon_vma_chain链表中
-	struct rb_node rb;			/* locked by anon_vma->rwsem */// 通畅加入anon_vma->rb_root
+
+	/* 用于加入到其他进程或者本进程vma的anon_vma的红黑树中 */
+	struct rb_node rb;			/* locked by anon_vma->rwsem */// 通常加入anon_vma->rb_root
 	unsigned long rb_subtree_last;
 #ifdef CONFIG_DEBUG_VM_RB
 	unsigned long cached_vma_start, cached_vma_last;

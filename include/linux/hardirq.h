@@ -6,6 +6,7 @@
 #include <linux/ftrace_irq.h>
 #include <linux/vtime.h>
 #include <asm/hardirq.h>
+do_generic_file_read
 
 
 extern void synchronize_irq(unsigned int irq);
@@ -32,10 +33,13 @@ extern void rcu_nmi_exit(void);
  * always balanced, so the interrupted value of ->hardirq_context
  * will always be restored.
  */
+// preempt_count_add(HARDIRQ_OFFSET); 禁止抢占
+
+
 #define __irq_enter()					\
 	do {						\
 		account_irq_enter_time(current);	\
-		preempt_count_add(HARDIRQ_OFFSET);	\
+		preempt_count_add(HARDIRQ_OFFSET);	\        
 		trace_hardirq_enter();			\
 	} while (0)
 

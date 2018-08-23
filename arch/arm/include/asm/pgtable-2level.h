@@ -118,6 +118,8 @@
  * entries are stored 1024 bytes below.
  */
 
+
+//linux标志采用这些
 // 前缀表示强制转化这个类型
 //((pteval_t)(1) << 1)  其实就是1 << 1  然后强制转化成 pteval_t类型
 #define L_PTE_VALID		(_AT(pteval_t, 1) << 0)		/* Valid */

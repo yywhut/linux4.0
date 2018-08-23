@@ -13,6 +13,7 @@
  *  Per cpu hot/cold page lists, bulk allocation, Martin J. Bligh, Sept 2002
  *          (lots of bits borrowed from Ingo Molnar & Andrew Morton)
  */
+	arch_spin_unlock(arch_spinlock_t * lock)
 
 #include <linux/stddef.h>
 #include <linux/mm.h>
@@ -1834,10 +1835,14 @@ static bool __zone_watermark_ok(struct zone *z, unsigned int order,
 	int o;
 	long free_cma = 0;
 
+
+	// 检查谁满足mark要求？是free pages，并且是分配出去2^order个page之后的free pages. 为何要+1？
 	free_pages -= (1 << order) - 1;  //free_pages Hex:0x2d61e  没变
-	if (alloc_flags & ALLOC_HIGH)
+
+	
+	if (alloc_flags & ALLOC_HIGH)  // 如果需求比较迫切，就放宽些限制
 		min -= min / 2;
-	if (alloc_flags & ALLOC_HARDER)
+	if (alloc_flags & ALLOC_HARDER) // 如果需求更加迫切，那就进一步放宽限制
 		min -= min / 4;
 	
 #ifdef CONFIG_CMA
@@ -1846,13 +1851,33 @@ static bool __zone_watermark_ok(struct zone *z, unsigned int order,
 		free_cma = zone_page_state(z, NR_FREE_CMA_PAGES);  // 这里还是0
 #endif
 
+	// 如果free pages已经不大于保留内存和min之和，说明此次分配请求不满足wartmark要求 
 	if (free_pages - free_cma <= min + z->lowmem_reserve[classzone_idx])
 		return false;
+
+
+	/*
+	函数中循环的目的可归结为：
+	依次循环，检查内存中是否有足够多的大块（即order比较高）空闲内存。
+	每次循环处理中，先把当前order的free page从总free pages中减掉，因为我们是看是否有足够多的大块内存。
+	当然，既然已经把free pages中的一部分已经划掉了，比较标准也应该相应放宽。
+	放宽多少，就是前面说的对min的右移处理。
+	举个例子，
+	如果请求分配的order是1，还有100个free pages，其中order 0的有96 pages，order 1的有4pages，处理后的min是16.
+	这样在第一轮循环中，free_pages即变为4，min假设右移了1位为8，这样判断下来不满足watermark要求。
+	如果将要求放宽，即将min_free_order_shift设置为4，这样第一轮循环中min变为1，free pages满足watermark要求。
+	*/
+
+	// 遍历buddy中比当前请求分配的order小的所有的order，依次检查free pages是否满足watermark要求。
 	for (o = 0; o < order; o++) {  // 如果order是0 这里直接跳出
+
+	// 每个循环当中，先把当前order(从0至请求的order-1)的free pages从总free pages中减掉
 		/* At the next order, this order's pages become unavailable */
 		free_pages -= z->free_area[o].nr_free << o;
 
 		/* Require fewer higher order pages to be free */
+		// 然后将min，即mark，即判断标准作相应的缩小
+  		// linux中默认每次缩小一半，
 		min >>= 1;
 
 		if (free_pages <= min)
@@ -1861,6 +1886,8 @@ static bool __zone_watermark_ok(struct zone *z, unsigned int order,
 	return true;
 }
 
+
+//zone_page_state(z, NR_FREE_PAGES) 读取这个zone的 free page
 bool zone_watermark_ok(struct zone *z, unsigned int order, unsigned long mark,
 		      int classzone_idx, int alloc_flags)
 {

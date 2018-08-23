@@ -15,6 +15,7 @@
 #include <asm/pgtable.h>
 
 #include "internal.h"
+do_page_fault
 
 static struct page *no_page_table(struct vm_area_struct *vma,
 		unsigned int flags)

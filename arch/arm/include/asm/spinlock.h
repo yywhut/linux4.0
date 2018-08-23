@@ -5,6 +5,8 @@
 #error SMP not supported on pre-ARMv6 CPUs
 #endif
 
+
+__irq_domain_alloc_irqs
 #include <linux/prefetch.h>
 
 /*
@@ -106,6 +108,8 @@ static inline int arch_spin_trylock(arch_spinlock_t *lock)
 	}
 }
 
+
+// 走的这里
 static inline void arch_spin_unlock(arch_spinlock_t *lock)
 {
 	smp_mb();

@@ -36,9 +36,13 @@ static inline int ptep_test_and_clear_young(struct vm_area_struct *vma,
 {
 	pte_t pte = *ptep;
 	int r = 1;
+
+	// 如果pte没有置位，表示最近没有访问过，就返回0
 	if (!pte_young(pte))
 		r = 0;
 	else
+			// 表示最近访问过，用pte_mkold  清掉yong的标志，然后写入页表
+			// 如果linux版本yong标志位0 ，则会清掉pte的硬件页表
 		set_pte_at(vma->vm_mm, address, ptep, pte_mkold(pte));
 	return r;
 }

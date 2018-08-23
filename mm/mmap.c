@@ -51,6 +51,9 @@
 
 #include "internal.h"
 
+do_anonymous_page(struct mm_struct * mm, struct vm_area_struct * vma, unsigned long address, pte_t * page_table, pmd_t * pmd, unsigned int flags)
+handle_pte_fault
+
 #ifndef arch_mmap_check
 #define arch_mmap_check(addr, len, flags)	(0)
 #endif
@@ -83,11 +86,13 @@ pgprot_t protection_map[16] = {
 	__S000, __S001, __S010, __S011, __S100, __S101, __S110, __S111
 };
 
+
+//建立vma的属性
+// protection_map 建立了很多属性组合，通过查表，可以查到vma的属性，进而转化成pte的属性
 pgprot_t vm_get_page_prot(unsigned long vm_flags)
 {
-	return __pgprot(pgprot_val(protection_map[vm_flags &
-				(VM_READ|VM_WRITE|VM_EXEC|VM_SHARED)]) |
-			pgprot_val(arch_vm_get_page_prot(vm_flags)));
+	return __pgprot(pgprot_val(protection_map[vm_flags &(VM_READ|VM_WRITE|VM_EXEC|VM_SHARED)]) 
+		|pgprot_val(arch_vm_get_page_prot(vm_flags)));
 }
 EXPORT_SYMBOL(vm_get_page_prot);
 
@@ -2830,7 +2835,7 @@ static unsigned long do_brk(unsigned long addr, unsigned long len)
 	vma->vm_end = addr + len;
 	vma->vm_pgoff = pgoff;
 	vma->vm_flags = flags;
-	vma->vm_page_prot = vm_get_page_prot(flags);
+	vma->vm_page_prot = vm_get_page_prot(flags);  //建立vma的属性
 	vma_link(mm, vma, prev, rb_link, rb_parent);
 out:
 	perf_event_mmap(vma);

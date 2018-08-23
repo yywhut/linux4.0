@@ -145,7 +145,7 @@ void __delete_from_swap_cache(struct page *page)
 	address_space = swap_address_space(entry);
 	radix_tree_delete(&address_space->page_tree, page_private(page));
 	set_page_private(page, 0);
-	ClearPageSwapCache(page);
+	ClearPageSwapCache(page);// 清PG_swapcache
 	address_space->nrpages--;
 	__dec_zone_page_state(page, NR_FILE_PAGES);
 	INC_CACHE_INFO(del_total);

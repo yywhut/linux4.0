@@ -567,6 +567,7 @@ int migrate_page(struct address_space *mapping,
 
 	BUG_ON(PageWriteback(page));	/* Writeback must be complete */
 
+	//匿名页面在这里没有做什么
 	rc = migrate_page_move_mapping(mapping, newpage, page, NULL, mode, 0);
 
 	if (rc != MIGRATEPAGE_SUCCESS)
@@ -769,6 +770,8 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 	int page_was_mapped = 0;
 	struct anon_vma *anon_vma = NULL;
 
+	//如果尝试获取页面锁不成功，不是强制迁移，或者迁移模式等于异步模式，，则忽略这个page，因为这种情况没有必要
+	//睡眠等待页面释放页面锁
 	if (!trylock_page(page)) {
 		if (!force || mode == MIGRATE_ASYNC)
 			goto out;
@@ -785,7 +788,7 @@ static int __unmap_and_move(struct page *page, struct page *newpage,
 		 * trying to be clever about what pages can be locked,
 		 * avoid the use of lock_page for direct compaction
 		 * altogether.
-		 */
+		 */// 可能是在直接内存压缩的内核路径上，睡眠等待页面锁是不安全的，书上描述很多
 		if (current->flags & PF_MEMALLOC)
 			goto out;
 

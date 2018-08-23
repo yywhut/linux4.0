@@ -37,7 +37,7 @@
  *
  * Aug/Sep 2004 Changed to four level page tables (Andi Kleen)
  */
-
+dup_mmap
 
 #include <linux/kernel_stat.h>
 #include <linux/mm.h>
@@ -1044,10 +1044,12 @@ int copy_page_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	 * readonly mappings. The tradeoff is that copy_page_range is more
 	 * efficient than faulting.
 	 */
+	  /* 这里只会处理匿名线性区或者包含有(VM_HUGETLB | VM_NONLINEAR | VM_PFNMAP | VM_MIXEDMAP)这几种标志的vma */
 	if (!(vma->vm_flags & (VM_HUGETLB | VM_PFNMAP | VM_MIXEDMAP)) &&
 			!vma->anon_vma)
 		return 0;
 
+	/* 如果是使用了hugetlbfs中的大页的情况 vma->vm_flags & VM_HUGETLB */
 	if (is_vm_hugetlb_page(vma))
 		return copy_hugetlb_page_range(dst_mm, src_mm, vma);
 
@@ -1067,20 +1069,38 @@ int copy_page_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	 * parent mm. And a permission downgrade will only happen if
 	 * is_cow_mapping() returns true.
 	 */
+	 /* 检查是否可能会对此vma进行写入(要求此vma是非共享vma，并且可能写入) (flags & (VM_SHARED | VM_MAYWRITE)) == VM_MAYWRITE */
 	is_cow = is_cow_mapping(vma->vm_flags);
 	mmun_start = addr;
 	mmun_end   = end;
+
+	/* 此vma可能会进行写时复制的处理 */
 	if (is_cow)
-		mmu_notifier_invalidate_range_start(src_mm, mmun_start,
-						    mmun_end);
+		/* 如果此vma使用了mm->mmu_notifier_mm这个通知链，则初始化这个通知链，通知的地址范围是addr ~ end */
+		mmu_notifier_invalidate_range_start(src_mm, mmun_start,mmun_end);
 
 	ret = 0;
+	/* 获取子进程对于开始地址对应的页全局目录项 */
 	dst_pgd = pgd_offset(dst_mm, addr);
+
+	 /* 获取父进程对于开始地址对应的页全局目录项 
+     * 实际这两项在页全局目录的偏移是一样的，只是项中的数据不同，子进程的页全局目录项是空的
+     */
 	src_pgd = pgd_offset(src_mm, addr);
 	do {
+
+		/* 获取从addr ~ end，一个页全局目录项从addr开始能够映射到的结束地址，返回这个结束地址
+         * 循环后会将addr = next，这样下次就会从 next ~ end，一步一步以pud能映射的地址范围长度减小
+         */
 		next = pgd_addr_end(addr, end);
+		 /* 父进程的页全局目录项是空的的情况 */
 		if (pgd_none_or_clear_bad(src_pgd))
 			continue;
+
+		/* 对这个页全局目录项对应的页上级目录项进行操作
+         * 并会不停深入，直到页表项
+         * 里面的处理与这个循环几乎一致，不过会在里面判断是否要对dst_pgd的各层申请页用于页表
+         */
 		if (unlikely(copy_pud_range(dst_mm, src_mm, dst_pgd, src_pgd,
 					    vma, addr, next))) {
 			ret = -ENOMEM;
@@ -2614,7 +2634,7 @@ static inline int check_stack_guard_page(struct vm_area_struct *vma, unsigned lo
 	}
 	return 0;
 }
-
+page_referenced
 /*
  * We enter with non-exclusive mmap_sem (to exclude vma changes,
  * but allow concurrent faults), and pte mapped but not yet locked.
@@ -2639,10 +2659,19 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 
 
 	/* Use the zero-page for reads */ // 如果属性是只读的，就用zero page 来分配
+	/* vma中的页是只读的的情况，因为是匿名页，又是只读的，不会是代码段，这里执行成功则直接设置页表项pte，不会进行反向映射 */
 	if (!(flags & FAULT_FLAG_WRITE) && !mm_forbids_zeropage(mm)) {
-		entry = pte_mkspecial(pfn_pte(my_zero_pfn(address),
-						vma->vm_page_prot));
+
+	 /* 创建pte页表项，这个pte会指向内核中一个默认的全是0的页框，并且会有vma->vm_page_prot中的标志，最后会加上_PAGE_SPECIAL标志 */
+		entry = pte_mkspecial(pfn_pte(my_zero_pfn(address),vma->vm_page_prot));
+
+	/* 当(NR_CPUS >= CONFIG_SPLIT_PTLOCK_CPUS)并且配置了USE_SPLIT_PTE_PTLOCKS时，对pmd所在的页上锁(锁是页描述符的ptl)
+         * 否则对整个页表上锁，锁是mm->page_table_lock
+         * 并再次获取address对应的页表项，有可能在其他核上被修改?
+         */
 		page_table = pte_offset_map_lock(mm, pmd, address, &ptl);
+
+		/* 如果页表项不为空，则说明这页曾经被该进程访问过，可能其他核上更改了此页表项 */
 		if (!pte_none(*page_table))
 			goto unlock;   // 如果pte表项为空
 		goto setpte;  // 如果不为空，则跳过去设置到硬件中
@@ -2650,9 +2679,15 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 
 // 如果属性可写，
 	/* Allocate our own private page. */
+
+	/* 为vma准备反向映射条件 
+     * 检查此vma能与前后的vma进行合并吗，如果可以，则使用能够合并的那个vma的anon_vma，如果不能够合并，则申请一个空闲的vma
+      * 新建一个anon_vma_chain，并且如果vma没有anon_vma则新建一个
+      * 将avc->anon_vma指向获得的vma，avc->vma指向vma，并把avc加入到vma的anon_vma_chain中
+      */
 	if (unlikely(anon_vma_prepare(vma)))//反向映射准备
 		goto oom;
-	// 分配一个可写的匿名页面，还是调用的 alloc_pages,优先使用高端内存
+	// 分配一个可写的匿名页面，还是调用的 alloc_pages,优先使用高端内存 这个页会清0
 	page = alloc_zeroed_user_highpage_movable(vma, address);
 	if (!page)
 		goto oom;
@@ -2661,30 +2696,52 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	 * preceeding stores to the page contents become visible before
 	 * the set_pte_at() write.
 	 */
+	 /* 设置此页的PG_uptodate标志，表示此页是最新的 */
 	__SetPageUptodate(page);
 
+	/* 更新memcg中的计数，如果超过了memcg中的限制值，则会把这个页释放掉，并返回VM_FAULT_OOM */
 	if (mem_cgroup_try_charge(page, mm, GFP_KERNEL, &memcg))
 		goto oom_free_page;
 
+	/* 根据vma的页参数，创建一个页表项 */   //  vma->vm_page_prot 是在do_brk 创建vma的时候建立的
+	//  
 	entry = mk_pte(page, vma->vm_page_prot);
-	if (vma->vm_flags & VM_WRITE)
+	if (vma->vm_flags & VM_WRITE)/* 如果vma区是可写的，则给页表项添加允许写标志 */
 		entry = pte_mkwrite(pte_mkdirty(entry));
+
+
+	/* 并再次获取address对应的页表项，并且上锁，锁可能在页中间目录对应的struct page的ptl中，也可能是mm_struct的page_table_lock
+		 * 因为需要修改，所以要上锁，而只读的情况是不需要上锁的
+		 */
 
 	page_table = pte_offset_map_lock(mm, pmd, address, &ptl);
 	if (!pte_none(*page_table))
 		goto release;
 
 	inc_mm_counter_fast(mm, MM_ANONPAGES);// 增加系统中匿名页面的统计计数
-	
+
+	/* 对这个新页进行反向映射 
+     * 主要工作是:
+     * 设置此页的_mapcount = 0，说明此页正在使用，但是是非共享的(>0是共享)
+     * 统计
+     * 设置page->mapping最低位为1
+     * page->mapping指向此vma->anon_vma
+     * page->index存放此page在vma中的第几页
+     */
 	page_add_new_anon_rmap(page, vma, address);//把匿名页面添加到RMAP反向映射系统中
-	
+
+
+	/* 提交memcg中的统计 */
 	mem_cgroup_commit_charge(page, memcg, false);
+
+	 /* 通过判断，将页加入到活动lru缓存或者不能换出页的lru链表 */
 	lru_cache_add_active_or_unevictable(page, vma);// 添加到LRU 链表中
 setpte:
-	set_pte_at(mm, address, page_table, entry);// 将pte设置到硬件页表
+	// 因为是匿名页面，所以第一次建立的时候会设置L_PTE_PRESENT 和 L_PTE_YONG两个bit位到linux页表中
+	set_pte_at(mm, address, page_table, entry);// 将pte设置到linux跟硬件页表/* 将上面配置好的页表项写入页表 */
 
 	/* No need to invalidate - it was non-present before */
-	update_mmu_cache(vma, address, page_table);
+	update_mmu_cache(vma, address, page_table); /* 让mmu更新页表项，应该会清除tlb */
 unlock:
 	pte_unmap_unlock(page_table, ptl);
 	return 0;
@@ -3279,10 +3336,10 @@ static int handle_pte_fault(struct mm_struct *mm,
 		entry = pte_mkdirty(entry);//如果当前pte是可写的，那就来设置 L_PTE_DIRTY比特位
 						// 什么时候会进入这个case？页在内存中，且pte具有可写属性
 	}
-
-
-
-	//第三部分对硬件pte的操作
+	// 如果上述情况都不是，有可能是为了模拟L_PTE_YONG才进到这里。
+	// 条件就是 linux页表存在，硬件页表不存在，且L_PTE_YONG为0 ，L_PTE_PRESENT为1.
+	
+	//第三部分对硬件pte的操作,这重新设定了L_PTE_YONG比特位，模拟硬件yong
 	entry = pte_mkyoung(entry);
 	if (ptep_set_access_flags(vma, address, pte, entry, flags & FAULT_FLAG_WRITE)) {
 		update_mmu_cache(vma, address, pte);

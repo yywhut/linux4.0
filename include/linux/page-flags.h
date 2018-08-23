@@ -72,33 +72,34 @@
  * SPARSEMEM_EXTREME with !SPARSEMEM_VMEMMAP).
  */
 enum pageflags {
-	PG_locked,		/* Page is locked. Don't touch. */// 已经上锁，不要访问
+	PG_locked,		/* Page is locked. Don't touch. */// 已经上锁，内存管理的其他模块不能访问这个页面
 	PG_error,// 发生了IO错误
-	PG_referenced,//用来实现LRU算法中第二次机会法
-	PG_uptodate,//页面内容有效，当该页面上的读操作完成后，设置该标志位
-	PG_dirty,//页面内容被修改过
-	PG_lru,//
+	PG_referenced,//用来实现LRU算法中第二次机会法，在kswapd页面回收中使用
+	PG_uptodate,//页面内容有效，当该页面上的读操作完成后，设置该标志位，也表示数据已经从块设备成功读取
+	PG_dirty,//页面内容被修改过，还没有和外部存储器进行过同步的操作
+	PG_lru,// 表示页面加入LRU中，lru是最近最少使用链表(least recently used)的简称。内核用LRU链表来管理活跃和不活跃页面
 	PG_active,//在active链表上
-	PG_slab,//该页由slab创建
+	PG_slab,//该页由slab创建，页面用于slab分配器
 	PG_owner_priv_1,	/* Owner use. If pagecache, fs may use*///页面的所有者使用，如果是pagecache页面，文件系统可能使用
 	PG_arch_1,//与体系结构相关
 	PG_reserved,//该页不可被换出
 	PG_private,		/* If pagecache, has fs-private data *///
 	PG_private_2,		/* If pagecache, has fs aux data */////
-	PG_writeback,		/* Page is under writeback *///正在回写
+	PG_writeback,		/* Page is under writeback *///正在向块设备回写
 #ifdef CONFIG_PAGEFLAGS_EXTENDED
 	PG_head,		/* A head page *///
 	PG_tail,		/* A tail page *///
 #else
 	PG_compound,		/* A compound page *///混合页面
 #endif
-	PG_swapcache,		/* Swap page: swp_entry_t in private *///交换页面
+						// 表明该页已经分配了swap空间
+	PG_swapcache,		/* Swap page: swp_entry_t in private *///页面处于交换缓存里面，一般匿名页面会写回swap分区里面
 	PG_mappedtodisk,	/* Has blocks allocated on-disk *///
 	PG_reclaim,		/* To be reclaimed asap *///马上要被回收了
-	PG_swapbacked,		/* Page is backed by RAM/swap *///
-	PG_unevictable,		/* Page is "unevictable"  *///
+	PG_swapbacked,		/* Page is backed by RAM/swap *///表示页面具有swap缓存功能，通常匿名页面才可以回写swap分区。
+	PG_unevictable,		/* Page is "unevictable"  */// 页面不可被回收
 #ifdef CONFIG_MMU
-	PG_mlocked,		/* Page is vma mlocked *///
+	PG_mlocked,		/* Page is vma mlocked *///表示页面对应的VMA 处于mlocked状态
 #endif
 #ifdef CONFIG_ARCH_USES_PG_UNCACHED
 	PG_uncached,		/* Page has been mapped as uncached *///
@@ -160,6 +161,17 @@ static inline void __ClearPage##uname(struct page *page)		\
 #define TESTSETFLAG(uname, lname)					\
 static inline int TestSetPage##uname(struct page *page)			\
 		{ return test_and_set_bit(PG_##lname, &page->flags); }
+
+
+/*
+TESTCLEARFLAG(Referenced, referenced)
+
+TestClearPageReferenced(page); 会被展开成
+
+static inline int TestClearPageReferenced(struct page *page)		\
+		{ return test_and_clear_bit(PG_referenced, &page->flags); }
+
+*/
 
 #define TESTCLEARFLAG(uname, lname)					\
 static inline int TestClearPage##uname(struct page *page)		\

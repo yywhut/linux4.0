@@ -33,6 +33,7 @@
 #include <linux/uio.h>
 
 #include "internal.h"
+balance_pgdat
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/pagemap.h>
@@ -621,6 +622,7 @@ void mark_page_accessed(struct page *page)
 }
 EXPORT_SYMBOL(mark_page_accessed);
 
+//用页向量来保存页，可以用批处理的方式来处理这些页
 static void __lru_cache_add(struct page *page)
 {
 	struct pagevec *pvec = &get_cpu_var(lru_add_pvec);

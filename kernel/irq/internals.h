@@ -8,6 +8,8 @@
 #include <linux/irqdesc.h>
 #include <linux/kernel_stat.h>
 
+__lru_cache_add
+
 #ifdef CONFIG_SPARSE_IRQ
 # define IRQ_BITMAP_BITS	(NR_IRQS + 8196)
 #else

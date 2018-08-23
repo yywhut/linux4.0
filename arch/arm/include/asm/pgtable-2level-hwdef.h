@@ -65,7 +65,7 @@
 #define PTE_CACHEABLE		(_AT(pteval_t, 1) << 3)
 
 /*
- *   - extended small page/tiny page
+ *   - extended small page/tiny page  // 硬件用的是这里
  */
 #define PTE_EXT_XN		(_AT(pteval_t, 1) << 0)		/* v6 */
 #define PTE_EXT_AP_MASK		(_AT(pteval_t, 3) << 4)

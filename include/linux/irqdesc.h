@@ -8,6 +8,9 @@
  * For now it's included from <linux/irq.h>
  */
 
+IRQS_ONESHOT
+
+
 struct irq_affinity_notify;
 struct proc_dir_entry;
 struct module;

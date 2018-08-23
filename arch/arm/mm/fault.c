@@ -8,6 +8,7 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
+ do_anonymous_page
 #include <linux/module.h>
 #include <linux/signal.h>
 #include <linux/mm.h>
@@ -25,6 +26,8 @@
 #include <asm/system_misc.h>
 #include <asm/system_info.h>
 #include <asm/tlbflush.h>
+
+irq_enter
 
 #include "fault.h"
 
@@ -276,7 +279,7 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	 * If we're in an interrupt or have no user
 	 * context, we must not take the fault..
 	 */
-	 //如果是在中断上下文或者禁止抢占，说明系统运行在院子上下文中，需要跳转
+	 //如果是在中断上下文或者禁止抢占，说明系统运行在原子上下文中，需要跳转
 	 // 如果当前进程中没有struct mm_struct数据结构，也需要跳转
 	if (in_atomic() || !mm)
 		goto no_context;

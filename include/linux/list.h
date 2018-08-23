@@ -6,6 +6,7 @@
 #include <linux/poison.h>
 #include <linux/const.h>
 #include <linux/kernel.h>
+mark_page_accessed(struct page * page)
 
 /*
  * Simple doubly linked list implementation.
@@ -35,6 +36,8 @@ static inline void INIT_LIST_HEAD(struct list_head *list)
  * the prev/next entries already!
  */
 #ifndef CONFIG_DEBUG_LIST
+
+//new 要插入的节点，prev 前继节点，next 后继节点
 static inline void __list_add(struct list_head *new,
 			      struct list_head *prev,
 			      struct list_head *next)
@@ -58,6 +61,7 @@ extern void __list_add(struct list_head *new,
  * Insert a new entry after the specified head.
  * This is good for implementing stacks.
  */
+ // 加入到链表头
 static inline void list_add(struct list_head *new, struct list_head *head)
 {
 	__list_add(new, head, head->next);

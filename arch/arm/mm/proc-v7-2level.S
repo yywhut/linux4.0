@@ -79,7 +79,7 @@ ENDPROC(cpu_v7_switch_mm)
  //r2 = 0
 ENTRY(cpu_v7_set_pte_ext)
 #ifdef CONFIG_MMU
-	str	r1, [r0]			@ linux version  // 把物理地址与标志放入 pte中
+	str	r1, [r0]			@ linux version  // 把这里是写入linux的页表项
 
 	bic	r3, r1, #0x000003f0
 	bic	r3, r3, #PTE_TYPE_MASK
@@ -99,6 +99,17 @@ ENTRY(cpu_v7_set_pte_ext)
 	tst	r1, #L_PTE_XN
 	orrne	r3, r3, #PTE_EXT_XN
 
+
+//这一段在老代码中是
+/*
+tst	r1, #L_PTE_YOUNG
+tstne	r1, #L_PTE_PRESENT	
+moveq	r3, #0
+也就是如果没有设置L_PTE_YOUNG，且L_PTE_PRESENT置位，表明linux版本里面页表是有的，且
+这个页是在内存中的，在这种情况下，将硬件页表清0.，这样在下一次访问到这个页的时候
+就可以发生缺页中断，以模拟硬件Yong的标志动作。
+
+*/
 	tst	r1, #L_PTE_YOUNG
 	tstne	r1, #L_PTE_VALID
 	eorne	r1, r1, #L_PTE_NONE

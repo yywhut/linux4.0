@@ -19,6 +19,7 @@
 #include <linux/atomic.h>
 #include <asm/page.h>
 remap_pfn_range
+lru_cache_add
 
 /* Free memory management - zoned buddy allocator.  */
 #ifndef CONFIG_FORCE_MAX_ZONEORDER
@@ -122,6 +123,8 @@ struct zone_padding {
 #define ZONE_PADDING(name)
 #endif
 
+
+//cat /proc/zoneinfo 可以打印出来
 enum zone_stat_item {  //这个结构体用于描述高速缓存页的使用。
 	/* First 128 byte cacheline (assuming 64 bit words) */
 	NR_FREE_PAGES,
@@ -238,13 +241,13 @@ struct lruvec {
 #define LRU_ALL	     ((1 << NR_LRU_LISTS) - 1)
 
 /* Isolate clean file */
-#define ISOLATE_CLEAN		((__force isolate_mode_t)0x1)
+#define ISOLATE_CLEAN		((__force isolate_mode_t)0x1)//分离干净的页面
 /* Isolate unmapped file */
-#define ISOLATE_UNMAPPED	((__force isolate_mode_t)0x2)
+#define ISOLATE_UNMAPPED	((__force isolate_mode_t)0x2)//分离没有映射的页面
 /* Isolate for asynchronous migration */
-#define ISOLATE_ASYNC_MIGRATE	((__force isolate_mode_t)0x4)
+#define ISOLATE_ASYNC_MIGRATE	((__force isolate_mode_t)0x4)//分离异步合并的要额面
 /* Isolate unevictable pages */
-#define ISOLATE_UNEVICTABLE	((__force isolate_mode_t)0x8)
+#define ISOLATE_UNEVICTABLE	((__force isolate_mode_t)0x8)//分离不可回收的页面
 
 /* LRU Isolation modes. */
 typedef unsigned __bitwise__ isolate_mode_t;
@@ -550,7 +553,9 @@ struct zone {
 
 	ZONE_PADDING(_pad3_)
 	/* Zone statistics */
-	atomic_long_t		vm_stat[NR_VM_ZONE_STAT_ITEMS];
+	//cat /proc/zoneinfo 可以打印出来
+
+	atomic_long_t		vm_stat[NR_VM_ZONE_STAT_ITEMS];  //内存域中各种类型页统计 //cat /proc/zoneinfo 可以打印出来
 } ____cacheline_internodealigned_in_smp;
 
 enum zone_flags {

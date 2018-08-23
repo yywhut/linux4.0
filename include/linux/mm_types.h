@@ -15,6 +15,9 @@
 #include <asm/page.h>
 #include <asm/mmu.h>
 find_vma
+	kmem_cache_alloc_trace
+	zone
+
 
 #ifndef AT_VECTOR_SIZE_ARCH
 #define AT_VECTOR_SIZE_ARCH 0
@@ -46,7 +49,7 @@ typedef void compound_page_dtor(struct page *);
  */
 
 
-
+v
 
 //atomic_t _count;          //页引用计数器
 //atomic_t _mapcount;    //页映射计数器
@@ -56,6 +59,7 @@ typedef void compound_page_dtor(struct page *);
 //_count+1为页使用者个数，_mapcount+1为页共享者个数
 // _count为-1时不可被__free_page()释放
 //_mapcount为0表示该页未被共享
+PG_reserved
 
 struct page {
 
@@ -66,6 +70,11 @@ struct page {
 	//paging_init()可设置PG_reserved做flags
 	//mem_init()可设置含PG_reserved的flags清除
 	//#define PG_reserved 11;表示页保留，无法被__free_page()回收
+
+	/* 在lru算法中主要用到两个标志
+     * PG_active: 表示此页当前是否活跃，当放到active_lru链表时，被置位
+     * PG_referenced: 表示此页最近是否被访问，每次页面访问都会被置位
+     */
 
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */
@@ -90,6 +99,10 @@ struct page {
 	/* Second double word */
 	struct {
 		union {
+			// 如果是文件映射，则是文件的偏移，如果是匿名页面
+			// 如果匿名页面是私有映射，就是相对于VMA的offset，如果是share的话就是把整个进程地址空间作为一个offset
+			//如果此页被分配作为一个匿名页，那么它的mapping会指向一个anon_vma，而index保存此匿名页在vma中以页的偏移量(比如vma的线性地址区间是12个页的大小，此页映射到了第8页包含的线性地址上)。需
+			// 注意这个index 是以byte 为单位的
 			pgoff_t index;		/* Our offset within mapping. */
 			void *freelist;		/* sl[aou]b first free object */ // 指向第一个freelist的地址
 			bool pfmemalloc;	/* If set by the page allocator,
@@ -136,7 +149,9 @@ struct page {
 					 * never succeed on tail
 					 * pages.
 					 */
+					 //进程相关，=0表示只有父进程映射了页面
 					atomic_t _mapcount;  //页映射计数器， 初始化的时候被设定成-1，每当页被映射的时候都会加加
+										//page->_mapcount >=0表示 page 有多个用户映射
 
 					struct { /* SLUB */
 						unsigned inuse:16;
@@ -145,6 +160,7 @@ struct page {
 					};
 					int units;	/* SLOB */
 				};
+				// 很多地方会增加这个值，看书上描述
 				atomic_t _count;		/* Usage count, see below. */ //页引用计数器,在初始化的时候就被置1了
 			};
 			unsigned int active;	/* SLAB */  // 作为下标，来指向可用的obj， active 来表示数组的下标,同时也表示活跃对象的计数，当这个计数为0的时候可以销毁这个slab
@@ -294,14 +310,25 @@ struct vm_region {
  * library, the executable area etc).
  */
 
+
+/* 描述线性区结构 
+ * 内核尽力把新分配的线性区与紧邻的现有线性区进程合并。如果两个相邻的线性区访问权限相匹配，就能把它们合并在一起。
+ * 每个线性区都有一组连续号码的页(非页框)所组成，而页只有在被访问的时候系统会产生缺页异常，在异常中分配页框
+ */
+
+anon_vma
 // 进程相关的，与内核的有区别
 struct vm_area_struct {
 	/* The first cache line has the info for VMA tree walking. */
 
+	/* 线性区内的第一个线性地址 */
 	unsigned long vm_start;		/* Our start address within vm_mm. */
+
+	/* 线性区之外的第一个线性地址 */
 	unsigned long vm_end;		/* The first byte after our end address
 					   within vm_mm. */
 
+	  /* 整个链表会按地址大小递增排序 */
 	/* linked list of VM areas per task, sorted by address */
 	struct vm_area_struct *vm_next, *vm_prev;
 
@@ -313,18 +340,30 @@ struct vm_area_struct {
 	 * VMAs below us in the VMA rbtree and its ->vm_prev. This helps
 	 * get_unmapped_area find a free area of the right size.
 	 */
+
+	/* 此vma的子树中最大的空闲内存块大小(bytes) */
 	unsigned long rb_subtree_gap;
 
 	/* Second cache line starts here. */
 
+	/* 指向所属的内存描述符 */
 	struct mm_struct *vm_mm;	/* The address space we belong to. */
+
+	/* 页表项标志的初值，当增加一个页时，内核根据这个字段的值设置相应页表项中的标志 */
+    /* 页表中的User/Supervisor标志应当总被置1 */
 	pgprot_t vm_page_prot;		/* Access permissions of this VMA. */// 访问权限
+
+	/* 线性区标志
+     * 读写可执行权限会复制到页表项中，由分页单元去检查这几个权限
+     */
 	unsigned long vm_flags;		/* Flags, see mm.h. */
 
 	/*
 	 * For areas with an address space and backing store,
 	 * linkage into the address_space->i_mmap interval tree.
 	 */
+
+	/* 链接到反向映射所使用的数据结构，用于文件映射的线性区，主要用于文件页的反向映射 */
 	struct {
 		struct rb_node rb;
 		unsigned long rb_subtree_last;
@@ -337,10 +376,17 @@ struct vm_area_struct {
 	 * or brk vma (with NULL file) can only be in an anon_vma list.
 	 */
 
+	/* 
+     * 指向匿名线性区链表头的指针，这个链表会将此mm_struct中的所有匿名线性区链接起来
+     * 匿名的MAP_PRIVATE、堆和栈的vma都会存在于这个anon_vma_chain链表中
+     * 如果mm_struct的anon_vma为空，那么其anon_vma_chain也一定为空
+     */
+
 	// 下面两个管理反向映射
 	struct list_head anon_vma_chain; /* Serialized by mmap_sem &
 					  * page_table_lock */
-					  	
+		
+		/* 指向anon_vma数据结构的指针，对于匿名线性区，此为重要结构 */
 	struct anon_vma *anon_vma;	/* Serialized by page_table_lock */
 
 	
@@ -351,11 +397,14 @@ struct vm_area_struct {
 	const struct vm_operations_struct *vm_ops;
 
 	/* Information about our backing store: */
-	// 一般用于文件映射，这里的单位要注意，是page为单位，对于匿名页面，通常也是有含义的，一般是0或者是 什么/page_size
+	//这里的单位要注意，是page为单位
+	// 分两种情况，用于文件映射，是相对于文件起始的地方的偏移，对于匿名页面，通常也是有含义的，一般是0或者是vm_addr/page_size
+	//对于匿名页面一种是share anonymous mapping，起点位置是0。另外一种是private anonymous mapping，
+	//起点位置是mapping的虚拟地址（除以page size）
 	unsigned long vm_pgoff;		/* Offset (within vm_file) in PAGE_SIZE
 					   units, *not* PAGE_CACHE_SIZE */
 
-					   
+	 /* 指向映射文件的文件对象，也可能指向建立shmem共享内存中返回的struct file，如果是匿名线性区，此值为NULL或者一个匿名文件(这个匿名文件跟swap有关?待看) */				   
 	struct file * vm_file;		/* File we map to (can be NULL). */
 	void * vm_private_data;		/* was vm_pte (shared mem) */
 
@@ -411,30 +460,57 @@ brk表示堆区域当前的结束地址（为什么栈空间没有当前的结�
 arg_start和arg_end表示进程参数列表，env_start和env_end表示环境变量，
 这两个区域都位于栈中最高的区域。
 */
+/* 所有的内存描述符存放在一个双向链表中，链表中第一个元素是init_mm，它是初始化阶段进程0的内存描述符 */
 
 //描述进程的
 struct mm_struct {
+	/* 指向线性区对象的链表头，链表是经过排序的，按线性地址升序排列，里面包括了匿名映射线性区和文件映射线性区 */
 	struct vm_area_struct *mmap;		/* list of VMAs */  //单链表，进程中所有的 都链接进来，注意是以vma的起始地址，按照递增的方式插入进来的
+
+	/* 指向线性区对象的红黑树的根，一个内存描述符的线性区会用两种方法组织，链表和红黑树，红黑树适合内存描述符有非常多线性区的情况 */
 	struct rb_root mm_rb;
 
 	u32 vmacache_seqnum;                   /* per-thread vmacache */
+
+
+/* 在进程地址空间中找一个可以使用的线性地址空间，查找一个空闲的地址区间
+     * len: 指定区间的长度
+     * 返回新区间的起始地址
+     */
+
 #ifdef CONFIG_MMU
 	unsigned long (*get_unmapped_area) (struct file *filp,
 				unsigned long addr, unsigned long len,
 				unsigned long pgoff, unsigned long flags);
 #endif
+
+	/* 标识第一个分配的匿名线性区或文件内存映射的线性地址 */
 	unsigned long mmap_base;		/* base of mmap area */
 	unsigned long mmap_legacy_base;         /* base of mmap area in bottom-up allocations */
 	unsigned long task_size;		/* size of task vm space */
+
+	/* 所有vma中最大的结束地址 */
 	unsigned long highest_vm_end;		/* highest vma end address */
+
+	/* 指向页全局目录 */
 	pgd_t * pgd;
-	atomic_t mm_users;			/* How many users with user space? */
+
+	/* 次使用计数器，存放了共享此mm_struct的轻量级进程的个数，但所有的mm_users在mm_count的计算中只算作1 */
+	atomic_t mm_users;			/* How many users with user space? */ /* 初始为1 */ 
+
+
+	/* 主使用计数器，当mm_count递减时，系统会检查是否为0，为0则解除这个mm_struct *//* 初始为1 */ 
 	atomic_t mm_count;			/* How many references to "struct mm_struct" (users count as 1) */
 	atomic_long_t nr_ptes;			/* PTE page table pages */
 	atomic_long_t nr_pmds;			/* PMD page table pages */
+
+	/* 线性区的个数，默认最多是65535个，系统管理员可以通过写/proc/sys/vm/max_map_count文件修改这个值 */
 	int map_count;				/* number of VMAs */
 
+	/* 线性区的自旋锁和页表的自旋锁 */
 	spinlock_t page_table_lock;		/* Protects page tables and some counters */
+
+	/* 线性区的自旋锁和页表的自旋锁 */
 	struct rw_semaphore mmap_sem;
 
 	struct list_head mmlist;		/* List of maybe swapped mm's.	These are globally strung
@@ -442,15 +518,26 @@ struct mm_struct {
 						 * by mmlist_lock
 						 */
 
-
+	 /* 进程所拥有的最大页框数 */
 	unsigned long hiwater_rss;	/* High-watermark of RSS usage */
+	/* 进程线性区中的最大页数 */
 	unsigned long hiwater_vm;	/* High-water virtual memory usage */
 
+	/* 进程地址空间的大小(页框数) */
 	unsigned long total_vm;		/* Total pages mapped */
+
+	 /* 锁住而不能换出的页的数量 */
 	unsigned long locked_vm;	/* Pages that have PG_mlocked set */
 	unsigned long pinned_vm;	/* Refcount permanently increased */
+
+	/* 共享文件内存映射中的页数量 */
 	unsigned long shared_vm;	/* Shared pages (files) */
+
+	/* 可执行内存映射中的页数量 */
 	unsigned long exec_vm;		/* VM_EXEC & ~VM_WRITE */
+
+
+	/* 用户态堆栈的页数量 */
 	unsigned long stack_vm;		/* VM_GROWSUP/DOWN */
 	unsigned long def_flags;
 	unsigned long start_code, end_code, start_data, end_data;//代码段从start_code到end_code；数据段从start_data到end_data。
@@ -490,10 +577,14 @@ struct mm_struct {
 	 * new_owner->mm == mm
 	 * new_owner->alloc_lock is held
 	 */
+	  /* 所属进程 */
 	struct task_struct __rcu *owner;
 #endif
 
 	/* store ref to file /proc/<pid>/exe symlink points to */
+
+	/* 代码段中映射的可执行文件的file */
+
 	struct file *exe_file;
 #ifdef CONFIG_MMU_NOTIFIER
 	struct mmu_notifier_mm *mmu_notifier_mm;

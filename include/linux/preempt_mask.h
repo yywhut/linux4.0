@@ -100,7 +100,7 @@
  * Do not use in_atomic() in driver code.
  */
 
-//是在中断上下文或者禁止抢占
+//是否是在中断上下文或者禁止抢占
 
 #define in_atomic()	((preempt_count() & ~PREEMPT_ACTIVE) != 0)
 
