@@ -5,14 +5,14 @@
  * cloning flags:
  */
 #define CSIGNAL		0x000000ff	/* signal mask to be sent at exit */
-#define CLONE_VM	0x00000100	/* set if VM shared between processes */
-#define CLONE_FS	0x00000200	/* set if fs info shared between processes */
-#define CLONE_FILES	0x00000400	/* set if open files shared between processes */
-#define CLONE_SIGHAND	0x00000800	/* set if signal handlers and blocked signals shared */
-#define CLONE_PTRACE	0x00002000	/* set if we want to let tracing continue on the child too */
-#define CLONE_VFORK	0x00004000	/* set if the parent wants the child to wake it up on mm_release */
-#define CLONE_PARENT	0x00008000	/* set if we want to have the same parent as the cloner */
-#define CLONE_THREAD	0x00010000	/* Same thread group? */
+#define CLONE_VM	0x00000100	/* set if VM shared between processes 父子进程共享内存空间*/
+#define CLONE_FS	0x00000200	/* set if fs info shared between processes 共享相同的文件系统*/
+#define CLONE_FILES	0x00000400	/* set if open files shared between processes 共享文件描述符*/
+#define CLONE_SIGHAND	0x00000800	/* set if signal handlers and blocked signals shared 共享相同的信号处理*/
+#define CLONE_PTRACE	0x00002000	/* set if we want to let tracing continue on the child too 父进程trace，子进程也trace*/
+#define CLONE_VFORK	0x00004000	/* set if the parent wants the child to wake it up on mm_release 父进程被挂起，直到子进程释放了虚拟内存资源 */
+#define CLONE_PARENT	0x00008000	/* set if we want to have the same parent as the cloner 新进程和创建他的进程是兄弟关系，而不是父子关系 */
+#define CLONE_THREAD	0x00010000	/* Same thread group? 父子进程共享相同的线程群*/
 #define CLONE_NEWNS	0x00020000	/* New mount namespace group */
 #define CLONE_SYSVSEM	0x00040000	/* share system V SEM_UNDO semantics */
 #define CLONE_SETTLS	0x00080000	/* create a new TLS for the child */

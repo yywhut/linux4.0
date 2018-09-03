@@ -8,9 +8,9 @@
  * MIGRATE_SYNC will block when migrating pages
  */
 enum migrate_mode {
-	MIGRATE_ASYNC,
+	MIGRATE_ASYNC,    // 异步模式，不会阻塞
 	MIGRATE_SYNC_LIGHT,
-	MIGRATE_SYNC,
+	MIGRATE_SYNC,// 同步模式，需要睡眠等待
 };
 
 #endif		/* MIGRATE_MODE_H_INCLUDED */

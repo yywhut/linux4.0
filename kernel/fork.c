@@ -335,6 +335,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 
 	setup_thread_stack(tsk, orig);
 	clear_user_return_notifier(tsk);
+	// 清调度标志，此时还没完成，不能调度
 	clear_tsk_need_resched(tsk);
 	set_task_stack_end_magic(tsk);
 
@@ -1320,6 +1321,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		goto fork_out;
 
 	retval = -ENOMEM;
+	// 分配 task实例
 	p = dup_task_struct(current);
 	if (!p)
 		goto fork_out;
@@ -1341,7 +1343,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	}
 	current->flags &= ~PF_NPROC_EXCEEDED;
 
-	retval = copy_creds(p, clone_flags);
+	retval = copy_creds(p, clone_flags); // 复制父进程的证书
 	if (retval < 0)
 		goto bad_fork_free;
 
@@ -1351,17 +1353,17 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * to stop root fork bombs.
 	 */
 	retval = -EAGAIN;
-	if (nr_threads >= max_threads)
+	if (nr_threads >= max_threads)  // 当前系统最多可拥有的进程个数
 		goto bad_fork_cleanup_count;
 
 	if (!try_module_get(task_thread_info(p)->exec_domain->module))
 		goto bad_fork_cleanup_count;
 
 	delayacct_tsk_init(p);	/* Must remain after dup_task_struct() */
-	p->flags &= ~(PF_SUPERPRIV | PF_WQ_WORKER);
-	p->flags |= PF_FORKNOEXEC;
-	INIT_LIST_HEAD(&p->children);
-	INIT_LIST_HEAD(&p->sibling);
+	p->flags &= ~(PF_SUPERPRIV | PF_WQ_WORKER);  // 告诉系统取消超级用户权限，并且这不是一个work
+	p->flags |= PF_FORKNOEXEC;  //设置这个进程暂时不能执行
+	INIT_LIST_HEAD(&p->children);// 新进程的子进程链表
+	INIT_LIST_HEAD(&p->sibling);  // 新进程的兄弟进程链表
 	rcu_copy_process(p);
 	p->vfork_done = NULL;
 	spin_lock_init(&p->alloc_lock);
@@ -1438,6 +1440,8 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	p->sequential_io	= 0;
 	p->sequential_io_avg	= 0;
 #endif
+
+// 这里是一些核心
 
 	/* Perform scheduler related setup. Assign this task to a CPU. */
 	retval = sched_fork(clone_flags, p);
@@ -1703,6 +1707,13 @@ struct task_struct *fork_idle(int cpu)
  * It copies the process, and if successful kick-starts
  * it and waits for it to finish using the VM if required.
  */
+ // clone_flag 创建进程的标志位集合，定义在 sched.h中
+ //stack_start  用户态栈的起始地址
+ //stack_size  用户态栈的大小，通常设为0
+ //parent_tidptr child_tidptr 指向用户空间中地址的两个指针，分别指向父子进程的PID
+ //
+ //
+ 
 long do_fork(unsigned long clone_flags,
 	      unsigned long stack_start,
 	      unsigned long stack_size,

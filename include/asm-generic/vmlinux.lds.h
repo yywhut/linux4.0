@@ -222,6 +222,7 @@
 	. = ALIGN(align);						\
 	*(.data..cacheline_aligned)
 
+//  内和栈
 #define INIT_TASK_DATA(align)						\
 	. = ALIGN(align);						\
 	*(.data..init_task)

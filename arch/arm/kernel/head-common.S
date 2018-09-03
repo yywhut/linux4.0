@@ -81,25 +81,54 @@ ENDPROC(__vet_atags)
 __mmap_switched:
 	adr	r3, __mmap_switched_data  取__mmap_switched_data的地址到r3. 这个地址就是第109行的地址.
 
-	ldmia	r3!, {r4, r5, r6, r7}    把 r3指向的地址中的数据放到 r4 这几个寄存器中
-									由于上面r3中存放的是地址，所以这里r4 到r7里面存放的都是地址
+	ldmia	r3!, {r4, r5, r6, r7} @并且累加r3的值
+
+	@ 将__mmap_switched_data(r3)上的值分别加载到r4、r5、r6、r7寄存器中，__mmap_switched_data前面说明了
+	@ 经过上述动作，r4、r5、r6、r7寄存器分别存放了如下值
+	@ r4 -> __data_loc：数据段存储地址
+	@ r5 -> _sdata：数据段起始地址
+	@ r6 -> __bss_start：堆栈段起始地址
+	@ r7 -> _end：堆栈段结束地址
+									
 	cmp	r4, r5				@ Copy data segment if needed  比较 __data_loc 和 _sdata
 1:	cmpne	r5, r6
 	ldrne	fp, [r4], #4
 	strne	fp, [r5], #4
 	bne	1b
+	@ 判断数据段存储地址(r4)和数据段起始地址(r5)
+@ 如果不一样的话需要搬移到数据段起始地址(r5)上。
 
 	mov	fp, #0				@ Clear BSS (and zero fp)
 1:	cmp	r6, r7
 	strcc	fp, [r6],#4
 	bcc	1b
 
+	@ 清空堆栈段。
+	@ 从堆栈段起始地址(r6)开始写入0，一直写到地址为堆栈段结束地址(r7)
+
  ARM(	ldmia	r3, {r4, r5, r6, r7, sp})    这里又是把地址放到后面的寄存器中
  THUMB(	ldmia	r3, {r4, r5, r6, r7}	)
  THUMB(	ldr	sp, [r3, #16]		)
+ 
+@ 继续将__mmap_switched_data(r3)上的值分别加载到r4、r5、r6、r7、sp寄存器中，注意是前面r3已经加载过一部分了，地址和__mmap_switched_data已经不一样了。
+@ 经过上述动作，r4、r5、r6、r7寄存器分别存放了如下值
+@ r4 -> processor_id变量地址：其内容是cpu处理器ID
+@ r5 -> __machine_arch_type变量地址：其内容是machine id
+@ r6 -> __atags_pointer变量地址：其内容是dtb的地址
+@ r7 -> cr_alignment变量地址：其内容是cp15的c1的寄存器的值
+@ sp->  init_thread_union + THREAD_START_SP，设置了当前进程的堆栈
+
+
+ 
 	str	r9, [r4]			@ Save processor ID
+	@ 把cpu处理器id(r9)放到processor_id变量中([r4])
+
 	str	r1, [r5]			@ Save machine type
+	@ 把mechine id(r1)存放到__machine_arch_type变量中([r5])
+	
 	str	r2, [r6]			@ Save atags pointer   把r2中的内容保存到r6所指向的存储单元中
+	@ 把dtb的地址指针(r2)存放到__atags_pointer变量中([r6])
+	
 	cmp	r7, #0
 	strne	r0, [r7]			@ Save control register values
 	b	start_kernel
@@ -107,17 +136,19 @@ ENDPROC(__mmap_switched)
 
 	.align	2
 	.type	__mmap_switched_data, %object
+
+	@留意这里放的都是地址
 __mmap_switched_data:
-	.long	__data_loc			@ r4
-	.long	_sdata				@ r5
-	.long	__bss_start			@ r6
+	.long	__data_loc			@ r4     // 数据段的起始地址
+	.long	_sdata				@ r5			
+	.long	__bss_start			@ r6		//bss段的起始地址
 	.long	_end				@ r7
-	.long	processor_id			@ r4
-	.long	__machine_arch_type		@ r5
-	.long	__atags_pointer			@ r6
+	.long	processor_id			@ r4     //cpu处理器ID地址，其变量定义在arch/arm/kernel/setup.c中
+	.long	__machine_arch_type		@ r5    //machine id地址，其变量定义在arch/arm/kernel/setup.c中
+	.long	__atags_pointer			@ r6    // device tree 地址 其变量定义在arch/arm/kernel/setup.c中
 #ifdef CONFIG_CPU_CP15
-	.long	cr_alignment			@ r7
-#else
+	.long	cr_alignment			@ r7  //cp15的c1寄存器的值的地址，也就是mmu控制寄存器的值，其变量定义在arch/arm/kernel/entry-armv.S中
+#else 
 	.long	0				@ r7
 #endif
 	.long	init_thread_union + THREAD_START_SP @ sp

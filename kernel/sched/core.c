@@ -1874,6 +1874,7 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	unsigned long flags;
 	int cpu = get_cpu();
 
+	// 初始化进程调度相关
 	__sched_fork(clone_flags, p);
 	/*
 	 * We mark the process as running here. This guarantees that

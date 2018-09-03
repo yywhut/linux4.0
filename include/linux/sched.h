@@ -2294,7 +2294,7 @@ void yield(void);
 extern struct exec_domain	default_exec_domain;
 
 union thread_union {
-	struct thread_info thread_info;
+	struct thread_info thread_info;   //arch/arm/include/asm/thread_info.h
 	unsigned long stack[THREAD_SIZE/sizeof(long)];
 };
 

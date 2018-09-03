@@ -22,5 +22,7 @@ EXPORT_SYMBOL(init_task);
  * Initial thread structure. Alignment of this is handled by a special
  * linker map entry.
  */
+
+// thread_union类型的联合体 init_thread_union 存放在__init_task_data 这个宏所指定的段中
 union thread_union init_thread_union __init_task_data =
 	{ INIT_THREAD_INFO(init_task) };

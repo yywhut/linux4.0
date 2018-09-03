@@ -243,6 +243,7 @@ SECTIONS
 	__data_loc = .;
 #endif
 
+// data段
 	.data : AT(__data_loc) {
 		_data = .;		/* address in memory */
 		_sdata = .;

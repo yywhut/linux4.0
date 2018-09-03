@@ -17,13 +17,13 @@ typedef void free_page_t(struct page *page, unsigned long private);
 #define MIGRATEPAGE_SUCCESS		0
 
 enum migrate_reason {
-	MR_COMPACTION,
+	MR_COMPACTION,   //内存规整
 	MR_MEMORY_FAILURE,
-	MR_MEMORY_HOTPLUG,
-	MR_SYSCALL,		/* also applies to cpusets */
-	MR_MEMPOLICY_MBIND,
-	MR_NUMA_MISPLACED,
-	MR_CMA
+	MR_MEMORY_HOTPLUG,  // 热插拔
+	MR_SYSCALL,		/* also applies to cpusets */  //就是系统调用
+	MR_MEMPOLICY_MBIND,  //
+	MR_NUMA_MISPLACED,  //
+	MR_CMA    //安卓里面
 };
 
 #ifdef CONFIG_MIGRATION

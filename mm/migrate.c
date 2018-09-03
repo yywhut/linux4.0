@@ -1085,6 +1085,14 @@ out:
  *
  * Returns the number of pages that were not migrated, or an error code.
  */
+ // from：表示要迁移的页面。是被之前的queue_pages_range函数去描述进程有
+ //哪些页面需要迁移。
+ //get_new_page，分配新页面的函数指针，用在新的内存节点中分配页面
+ //put_new_page 释放页面的函数指针
+ //private 传递给get_new_page
+ // mode 迁移模式
+ // reason 迁移的原因
+  migrate_reason
 int migrate_pages(struct list_head *from, new_page_t get_new_page,
 		free_page_t put_new_page, unsigned long private,
 		enum migrate_mode mode, int reason)
