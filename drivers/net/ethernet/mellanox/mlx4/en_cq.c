@@ -30,6 +30,7 @@
  * SOFTWARE.
  *
  */
+	__get_user_pages
 
 #include <linux/mlx4/cq.h>
 #include <linux/mlx4/qp.h>

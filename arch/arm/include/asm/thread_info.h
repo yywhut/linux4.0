@@ -29,6 +29,7 @@ struct exec_domain;
 #include <asm/domain.h>
 
 typedef unsigned long mm_segment_t;
+cpu_switch_to
 
 struct cpu_context_save {
 	__u32	r4;
@@ -37,7 +38,7 @@ struct cpu_context_save {
 	__u32	r7;
 	__u32	r8;
 	__u32	r9;
-	__u32	sl;
+	__u32	sl;     // 就是r10
 	__u32	fp;
 	__u32	sp;
 	__u32	pc;

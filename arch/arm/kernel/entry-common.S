@@ -29,6 +29,8 @@
  * possible here, and this includes saving r0 back into the SVC
  * stack.
  */
+ 
+ //异常返回
 ret_fast_syscall:
  UNWIND(.fnstart	)
  UNWIND(.cantunwind	)
@@ -119,48 +121,64 @@ ENTRY(vector_swi)
 #ifdef CONFIG_CPU_V7M
 	v7m_exception_entry
 #else
-	sub	sp, sp, #S_FRAME_SIZE
-	stmia	sp, {r0 - r12}			@ Calling r0 - r12
- ARM(	add	r8, sp, #S_PC		)
- ARM(	stmdb	r8, {sp, lr}^		)	@ Calling sp, lr
- THUMB(	mov	r8, sp			)
- THUMB(	store_user_sp_lr r8, r10, S_SP	)	@ calling sp, lr
-	mrs	r8, spsr			@ called from non-FIQ mode, so ok.
-	str	lr, [sp, #S_PC]			@ Save calling PC
-	str	r8, [sp, #S_PSR]		@ Save CPSR
+
+将中断发生前的寄存器状态备份入栈，/*在栈上开辟18*4的空间备份跳转之前的寄存器值*/
+
+
+	sub	sp, sp, #S_FRAME_SIZE       @S_FRAME_SIZE 是72个字节，因该是自动生成的 include/generated/asm-offsets.h:
+	stmia	sp, {r0 - r12}			@ Calling r0 - r12  备份公用寄存器r0-r12  //把 r0-r12 的数据保存到sp指向的地址上,且地址增加方向排列
+ ARM(	add	r8, sp, #S_PC		)   /*r8指向栈空间中应该存pc的位置*/    #S_PC  = 60 因为pc就是r15                 r8=0xeebe1fec
+
+/*备份usr_mode的r13 r14 这里^表示被备份的sp lr 是usr_mode的寄存器不是目前所在svc_mode的寄存器*/
+ ARM(	stmdb	r8, {sp, lr}^		)	@ Calling sp, lr秒 注意这里是先将r8 -4 然后先压lr，再压sp
+ THUMB(	mov	r8, sp			)  没有执行
+ THUMB(	store_user_sp_lr r8, r10, S_SP	)	@ calling sp, lr  么有执行
+
+
+ 	//从usr发生软中断跳转到svc时，原来的cpsr会被存储到spsr_svc中
+	mrs	r8, spsr			@ called from non-FIQ mode, so ok.  状态寄存器到通用寄存器的传送指令。
+	str	lr, [sp, #S_PC]			@ Save calling PC    //保存用户空间的lr即返回的pc地址到内核栈                                                                                                
+	str	r8, [sp, #S_PSR]		@ Save CPSR       //保存保存cpsr到内核堆栈     
 	str	r0, [sp, #S_OLD_R0]		@ Save OLD_R0
 #endif
 	zero_fp
 	alignment_trap r10, ip, __cr_alignment
 	enable_irq
 	ct_user_exit
-	get_thread_info tsk
+	get_thread_info tsk   //tsk(r9)存储了栈底的地址
 
 	/*
 	 * Get the system call number.
 	 */
 
-#if defined(CONFIG_OABI_COMPAT)
+#if defined(CONFIG_OABI_COMPAT) // 这里没有定义
 
 	/*
 	 * If we have CONFIG_OABI_COMPAT then we need to look at the swi
 	 * value to determine if it is an EABI or an old ABI call.
 	 */
-#ifdef CONFIG_ARM_THUMB
+
+
+ //{0x8:xxx:fetch<--pc},{0x4:xxx:decode<--lr},{0x0:swi num:exe}
+ 
+#ifdef CONFIG_ARM_THUMB   //这里有定义
 	tst	r8, #PSR_T_BIT
 	movne	r10, #0				@ no thumb OABI emulation
  USER(	ldreq	r10, [lr, #-4]		)	@ get SWI instruction
+ 
 #else
  USER(	ldr	r10, [lr, #-4]		)	@ get SWI instruction
+ 
 #endif
- ARM_BE8(rev	r10, r10)			@ little endian instruction
 
-#elif defined(CONFIG_AEABI)
+ ARM_BE8(rev	r10, r10)			@ little endian instruction  // little endian instruction 考虑到CPU的大小端的设计。
+
+#elif defined(CONFIG_AEABI)  // 这里有定义，所以这里代码为空
 
 	/*
 	 * Pure EABI user space always put syscall number into scno (r7).
 	 */
-#elif defined(CONFIG_ARM_THUMB)
+#elif defined(CONFIG_ARM_THUMB)  // 这里有定义
 	/* Legacy ABI only, possibly thumb mode. */
 	tst	r8, #PSR_T_BIT			@ this is SPSR from save_user_regs
 	addne	scno, r7, #__NR_SYSCALL_BASE	@ put OS number in
@@ -171,9 +189,11 @@ ENTRY(vector_swi)
  USER(	ldr	scno, [lr, #-4]		)	@ get SWI instruction
 #endif
 
-	adr	tbl, sys_call_table		@ load syscall table pointer
+// 上面代码都没有执行，所以直接从r7 得到的 syscall number
 
-#if defined(CONFIG_OABI_COMPAT)
+	adr	tbl, sys_call_table		@ load syscall table pointer   将sys_call_table地址加载到tbl(r8)
+
+#if defined(CONFIG_OABI_COMPAT)  // 这个if也都没有执行
 	/*
 	 * If the swi argument is zero, this is an EABI call and we do nothing.
 	 *
@@ -181,7 +201,7 @@ ENTRY(vector_swi)
 	 * get the old ABI syscall table address.
 	 */
 	bics	r10, r10, #0xff000000
-	eorne	scno, r10, #__NR_OABI_SYSCALL_BASE
+	eorne	scno, r10, #__NR_OABI_SYSCALL_BASE   //从r10 获取中断号，r10存储的本来是swi指令的完整指令码，可以从上面代码看到
 	ldrne	tbl, =sys_oabi_call_table
 #elif !defined(CONFIG_AEABI)
 	bic	scno, scno, #0xff000000		@ mask off SWI op-code
@@ -190,14 +210,19 @@ ENTRY(vector_swi)
 
 local_restart:
 	ldr	r10, [tsk, #TI_FLAGS]		@ check for syscall tracing
+	//将参数r4 r5入栈，因为系统调用最多有6个参数
+    //但APCS规定只有r0-r3 4个参数可以用寄存器传递，因此r4 r5 两个参数必然要通过栈来传递
 	stmdb	sp!, {r4, r5}			@ push fifth and sixth args
 
 	tst	r10, #_TIF_SYSCALL_WORK		@ are we tracing syscalls?
 	bne	__sys_trace
 
 	cmp	scno, #NR_syscalls		@ check upper syscall limit
-	adr	lr, BSYM(ret_fast_syscall)	@ return address
-	ldrcc	pc, [tbl, scno, lsl #2]		@ call sys_* routine
+	adr	lr, BSYM(ret_fast_syscall)	@ return address   BSYM 意义不大，是一个宏，在文件arch/arm/include/asm/unified.h中定义
+														@主要是处理thrum指令集的，这里就是把返回地址放到lr中
+
+	//tbl:数组表基地址,  scno:要调用的sys_write()的索引值     lsl #2:左移2位,一个函数指针占据4个字节
+	ldrcc	pc, [tbl, scno, lsl #2]		@ call sys_* routine     cc 是条件执行，表示当scno < NR_syscalls的时候执行
 
 	add	r1, sp, #S_OFF
 2:	cmp	scno, #(__ARM_NR_BASE - __NR_SYSCALL_BASE)
@@ -268,9 +293,23 @@ __cr_alignment:
 #define OBSOLETE(syscall) syscall
 #endif
 
-	.type	sys_call_table, #object
+
+
+		@type：用来指定一个符号的类型是函数类型或者是对象类型
+	.type	sys_call_table, #object        .type main,%function表示为函数 
 ENTRY(sys_call_table)
-#include "calls.S"
+#include "calls.S"     将列表放在这里了
+
+/*
+此處calls.S展開如下：
+.long sys_restart_syscall
+.long sys_exit
+.long sys_fork_wrapper
+.long sys_read
+.long sys_write
+.long sys_open
+......
+*/
 #undef ABI
 #undef OBSOLETE
 

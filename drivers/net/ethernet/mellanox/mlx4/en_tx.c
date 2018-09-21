@@ -29,7 +29,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- */
+ */ 
 
 #include <asm/page.h>
 #include <linux/mlx4/cq.h>

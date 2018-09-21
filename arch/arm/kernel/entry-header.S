@@ -398,4 +398,4 @@
 scno	.req	r7		@ syscall number
 tbl	.req	r8		@ syscall table pointer
 why	.req	r8		@ Linux syscall (!= 0)
-tsk	.req	r9		@ current thread_info
+tsk	.req	r9		@ current thread_info   进程栈的栈底，存储着该进程的基本信息如id 调度优先级 等等

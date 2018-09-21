@@ -74,7 +74,7 @@ dup_mmap
 
 gfpflags_to_migratetype(const gfp_t gfp_flags)
 
-
+do_fork
 #ifdef LAST_CPUPID_NOT_IN_PAGE_FLAGS
 #warning Unfortunate NUMA and NUMA Balancing config, growing page-frame for last_cpupid.
 #endif
@@ -3012,6 +3012,7 @@ static int do_cow_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 		return VM_FAULT_OOM;
 	}
 	// 读取文件内容到fault_page中
+// 进入mm/shmem.c      shmem_fault
 	ret = __do_fault(vma, address, pgoff, flags, new_page, &fault_page);
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
 		goto uncharge_out;

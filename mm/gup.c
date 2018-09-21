@@ -417,6 +417,8 @@ static int check_vma_flags(struct vm_area_struct *vma, unsigned long gup_flags)
  * instead of __get_user_pages. __get_user_pages should be used only if
  * you need some special @gup_flags.
  */
+
+// 通过mm跟虚拟地址就可以得到得到物理页面
 long __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 		unsigned long start, unsigned long nr_pages,
 		unsigned int gup_flags, struct page **pages,
@@ -479,6 +481,7 @@ retry:
 		page = follow_page_mask(vma, start, foll_flags, &page_mask);
 		if (!page) {
 			int ret;
+			// 还没有建立映射关系，主动触发一次缺页中断来建立关系
 			ret = faultin_page(tsk, vma, start, &foll_flags,nonblocking); //  人为触发缺页中断
 			switch (ret) {
 			case 0:
