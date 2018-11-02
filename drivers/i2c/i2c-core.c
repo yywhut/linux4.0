@@ -1250,11 +1250,13 @@ static void i2c_scan_static_board_info(struct i2c_adapter *adapter)
 
 /* OF support code */
 
+// of 走的这里
+
 #if IS_ENABLED(CONFIG_OF)
 static struct i2c_client *of_i2c_register_device(struct i2c_adapter *adap,
 						 struct device_node *node)
 {
-	struct i2c_client *result;
+	struct i2c_client *result;     //根据子节点来创建i2c_client
 	struct i2c_board_info info = {};
 	struct dev_archdata dev_ad = {};
 	const __be32 *addr;
@@ -1308,6 +1310,7 @@ static void of_i2c_register_devices(struct i2c_adapter *adap)
 
 	dev_dbg(&adap->dev, "of_i2c: walking child nodes\n");
 
+	// 把所有的子节点进行处理，创建i2c_client
 	for_each_available_child_of_node(adap->dev.of_node, node)
 		of_i2c_register_device(adap, node);
 }

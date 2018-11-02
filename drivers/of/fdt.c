@@ -96,6 +96,7 @@ int of_fdt_is_compatible(const void *blob,
 	cp = fdt_getprop(blob, node, "compatible", &cplen);
 	if (cp == NULL)
 		return 0;
+	// 跟第一个属性值比较，如果相等，返回1，如果不想等，跟第二个比较，成功则返回2
 	while (cplen > 0) {
 		score++;
 		if (of_compat_cmp(cp, compat, strlen(compat)) == 0)
@@ -168,11 +169,11 @@ static void * unflatten_dt_node(void *blob,
 	int has_name = 0;
 	int new_format = 0;
 
-	pathp = fdt_get_name(blob, *poffset, &l);
+	pathp = fdt_get_name(blob, *poffset, &l); //把名字取出来
 	if (!pathp)
 		return mem;
 
-	allocl = l++;
+	allocl = l++; // 名字加上0
 
 	/* version 0x10 has a more compact unit name here instead of the full
 	 * path. we accumulate the full path size using "fpsize", we'll rebuild
@@ -200,11 +201,13 @@ static void * unflatten_dt_node(void *blob,
 		}
 	}
 
+	// 不但分配了device的结构体，还分配了名字的空间
 	np = unflatten_dt_alloc(&mem, sizeof(struct device_node) + allocl,
 				__alignof__(struct device_node));
 	if (!dryrun) {
 		char *fn;
 		of_node_init(np);
+	//所以这个节点的full name 就指向这个device_node的尾部
 		np->full_name = fn = ((char *)np) + sizeof(*np);
 		if (new_format) {
 			/* rebuild full path for new format */
@@ -231,6 +234,7 @@ static void * unflatten_dt_node(void *blob,
 		}
 	}
 	/* process properties */
+	// 下面是处理属性
 	for (offset = fdt_first_property_offset(blob, *poffset);
 	     (offset >= 0);
 	     (offset = fdt_next_property_offset(blob, offset))) {
@@ -266,7 +270,7 @@ static void * unflatten_dt_node(void *blob,
 			 * stuff */
 			if (strcmp(pname, "ibm,phandle") == 0)
 				np->phandle = be32_to_cpup(p);
-			pp->name = (char *)pname;
+			pp->name = (char *)pname;  // 设置名字，value等
 			pp->length = sz;
 			pp->value = (__be32 *)p;
 			*prev_pp = pp;
@@ -385,6 +389,7 @@ static void __unflatten_device_tree(void *blob,
 	}
 
 	/* First pass, scan for size */
+	// 首先计算树的大小，然后来分配树的空间
 	start = 0;
 	size = (unsigned long)unflatten_dt_node(blob, NULL, &start, NULL, NULL, 0, true);
 	size = ALIGN(size, 4);
@@ -400,7 +405,8 @@ static void __unflatten_device_tree(void *blob,
 	pr_debug("  unflattening %p...\n", mem);
 
 	/* Second pass, do actual unflattening */
-	start = 0;
+	start = 0;
+	//这里是真正的构造这个树
 	unflatten_dt_node(blob, mem, &start, NULL, mynodes, 0, false);
 	if (be32_to_cpup(mem + size) != 0xdeadbeef)
 		pr_warning("End of tree marker overwritten: %08x\n",
@@ -562,6 +568,7 @@ void __init early_init_fdt_scan_reserved_mem(void)
 		return;
 
 	/* Reserve the dtb region */
+	// 把ftd的部分保留下来
 	early_init_dt_reserve_memory_arch(__pa(initial_boot_params),
 					  fdt_totalsize(initial_boot_params),
 					  0);
@@ -575,7 +582,7 @@ void __init early_init_fdt_scan_reserved_mem(void)
 	}
 
 	of_scan_flat_dt(__fdt_scan_reserved_mem, NULL);
-	fdt_init_reserved_mem();
+	fdt_init_reserved_mem();    // fdt里面需要保留的内存，如果没有则里面东西不执行
 }
 
 /**
@@ -603,7 +610,7 @@ int __init of_scan_flat_dt(int (*it)(unsigned long node,
 		pathp = fdt_get_name(blob, offset, NULL);
 		if (*pathp == '/')
 			pathp = kbasename(pathp);
-		rc = it(offset, pathp, depth, data);
+		rc = it(offset, pathp, depth, data);  // rc不是0，就退出循环，it是callback
 	}
 	return rc;
 }
@@ -693,8 +700,11 @@ const void * __init of_flat_dt_match_machine(const void *default_match,
 	unsigned int best_score = ~1, score = 0;
 
 	dt_root = of_get_flat_dt_root();
+
+	//跟每一个machine des比较，都有一个成绩值
 	while ((data = get_next_compat(&compat))) {
 		score = of_flat_dt_match(dt_root, compat);
+		// 成绩越小，兼容度越高，就把这个成绩最小的记录下来
 		if (score > 0 && score < best_score) {
 			best_data = data;
 			best_score = score;
@@ -817,6 +827,9 @@ early_param("earlycon", setup_of_earlycon);
 /**
  * early_init_dt_scan_root - fetch the top level address and size cells
  */
+
+//
+//  就是为了保存这两个值， #address-cells = <1>;
 int __init early_init_dt_scan_root(unsigned long node, const char *uname,
 				   int depth, void *data)
 {
@@ -830,7 +843,7 @@ int __init early_init_dt_scan_root(unsigned long node, const char *uname,
 
 	prop = of_get_flat_dt_prop(node, "#size-cells", NULL);
 	if (prop)
-		dt_root_size_cells = be32_to_cpup(prop);
+		dt_root_size_cells = be32_to_cpup(prop);// 转成cpu所使用的字节序，dtb是大端序
 	pr_debug("dt_root_size_cells = %x\n", dt_root_size_cells);
 
 	prop = of_get_flat_dt_prop(node, "#address-cells", NULL);
@@ -881,6 +894,7 @@ int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 
 	pr_debug("memory scan node %s, reg size %d, data: %x %x %x %x,\n",
 	    uname, l, reg[0], reg[1], reg[2], reg[3]);
+//memory scan node memory@60000000, reg size 8, data: 60 40 2000000 1000000,
 
 	while ((endp - reg) >= (dt_root_addr_cells + dt_root_size_cells)) {
 		u64 base, size;
@@ -892,6 +906,9 @@ int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 			continue;
 		pr_debug(" - %llx ,  %llx\n", (unsigned long long)base,
 		    (unsigned long long)size);
+
+
+			//- 60000000 ,  40000000
 
 		early_init_dt_add_memory_arch(base, size);// 上面是查找内存，这里就是把找到的内存加到
 												// memblock子系统里面
@@ -908,6 +925,7 @@ int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
 
 	pr_debug("search \"chosen\", depth: %d, uname: %s\n", depth, uname);
 
+	// 如果节点的名字不是 chose，就直接返回0，返回0就表明想去处理下个节点
 	if (depth != 1 || !data ||
 	    (strcmp(uname, "chosen") != 0 && strcmp(uname, "chosen@0") != 0))
 		return 0;
@@ -915,7 +933,9 @@ int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
 	early_init_dt_check_for_initrd(node);
 
 	/* Retrieve command line */
+	// 把属性取出来保存在data中
 	p = of_get_flat_dt_prop(node, "bootargs", &l);
+	// data就是参数，也就是boot_command_line
 	if (p != NULL && l > 0)
 		strlcpy(data, p, min((int)l, COMMAND_LINE_SIZE));
 
@@ -1019,6 +1039,8 @@ bool __init early_init_dt_verify(void *params)
 		return false;
 
 	/* Setup flat device-tree pointer */
+	
+	// 这个ftd的地址会保存在这个全局变量里面，以后经常会用到
 	initial_boot_params = params;
 	of_fdt_crc32 = crc32_be(~0, initial_boot_params,
 				fdt_totalsize(initial_boot_params));
@@ -1029,9 +1051,10 @@ bool __init early_init_dt_verify(void *params)
 void __init early_init_dt_scan_nodes(void)
 {
 	/* Retrieve various information from the /chosen node */
+// 处理boot arg，存入boot_command_line
 	of_scan_flat_dt(early_init_dt_scan_chosen, boot_command_line);
 
-	/* Initialize {size,address}-cells info */
+	/* Initialize {size,address}-cells info */  //这里就是处理根节点中的size 跟address两个信息
 	of_scan_flat_dt(early_init_dt_scan_root, NULL);
 
 	/* Setup memory, calling early_init_dt_add_memory_arch */
@@ -1060,6 +1083,9 @@ bool __init early_init_dt_scan(void *params)
  */
 void __init unflatten_device_tree(void)
 {
+//initial_boot_params 就是存放dtb数据的起始地址，这个函数会遍历每一个节点，构造出device
+//node 结构体，生成树状结构，找个树的根节点会保存在of_root中，这个就是一个device_node
+//的指针
 	__unflatten_device_tree(initial_boot_params, &of_root,
 				early_init_dt_alloc_memory_arch);
 

@@ -851,7 +851,7 @@ static void __init reserve_crashkernel(void)
 	unsigned long long total_mem;
 	int ret;
 
-	total_mem = get_total_mem();
+	total_mem = get_total_mem();    //total_mem =0x2f800000
 	ret = parse_crashkernel(boot_command_line, total_mem,
 				&crash_size, &crash_base);
 	if (ret)
@@ -915,6 +915,7 @@ void __init setup_arch(char **cmdline_p)
 	init_mm.end_code   = (unsigned long) _etext;
 	init_mm.end_data   = (unsigned long) _edata;
 	init_mm.brk	   = (unsigned long) _end;
+	//这四个参数来自于文件：[ arch/arm/kernel/vmlinux.lds.S ]
 
 	/* populate cmd_line too for later use, preserving boot_command_line */
 	strlcpy(cmd_line, boot_command_line, COMMAND_LINE_SIZE);
@@ -938,6 +939,7 @@ void __init setup_arch(char **cmdline_p)
 	if (mdesc->restart)
 		arm_pm_restart = mdesc->restart;
 
+	// 把ftd构造成一个树
 	unflatten_device_tree();
 
 	arm_dt_init_cpu_maps();
@@ -972,7 +974,7 @@ void __init setup_arch(char **cmdline_p)
 #endif
 #endif
 
-	if (mdesc->init_early)
+	if (mdesc->init_early)  // 没执行
 		mdesc->init_early();
 }
 

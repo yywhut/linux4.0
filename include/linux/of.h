@@ -33,9 +33,9 @@ typedef u32 phandle;
 typedef u32 ihandle;
 
 struct property {
-	char	*name;
-	int	length;
-	void	*value;
+	char	*name;  // 属性名字, 指向dtb文件中的字符串
+	int	length;  // 属性值的长度,按照字节计算
+	void	*value;   // 属性值, 指向dtb文件中value所在位置, 数据仍以big endian存储
 	struct property *next;
 	unsigned long _flags;
 	unsigned int unique_id;
@@ -46,18 +46,19 @@ struct property {
 struct of_irq_controller;
 #endif
 
+// 每个大括号，都需要一个结构体描述
 struct device_node {
-	const char *name;
-	const char *type;
-	phandle phandle;
-	const char *full_name;
+	const char *name;  // 来自节点中的name属性, 如果没有该属性, 则设为"NULL"
+	const char *type;  // 来自节点中的device_type属性, 如果没有该属性, 则设为"NULL"
+	phandle phandle;		// 以整数来标示一个节点的位置
+	const char *full_name;  // 节点的名字, node-name[@unit-address]
 	struct fwnode_handle fwnode;
 
-	struct	property *properties;
+	struct	property *properties;  // 节点的属性
 	struct	property *deadprops;	/* removed properties */
-	struct	device_node *parent;
-	struct	device_node *child;
-	struct	device_node *sibling;
+	struct	device_node *parent;  // 节点的父亲
+	struct	device_node *child;  // 节点的孩子(子节点)
+	struct	device_node *sibling;  // 节点的兄弟(同级节点)
 	struct	kobject kobj;
 	unsigned long _flags;
 	void	*data;

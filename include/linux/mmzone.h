@@ -441,7 +441,7 @@ struct zone {
 	 * adjust_managed_page_count() should be used instead of directly
 	 * touching zone->managed_pages and totalram_pages.
 	 */
-	unsigned long		managed_pages;
+	unsigned long		managed_pages;  //也就是留给伙伴系统的
 	unsigned long		spanned_pages;
 	unsigned long		present_pages;
 

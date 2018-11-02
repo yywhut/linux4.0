@@ -50,18 +50,14 @@ int __init_memblock memblock_add_range(struct memblock_type *type,
 
 	/*	获取内存区域的结束位置,memblock_cap_size函数会设置size大小确保base + size不会溢出  */
 	phys_addr_t end = base + memblock_cap_size(base, &size);  //0x6112e158
-	int i, nr_new;
-
-	if (!size)
-		return 0;
 
 	//第一次进来会先进这里,如果内存集合为空，则不需要执行插入或者合并动作
 	// 第一次放memroy 跟reserve 都是先进的这里
 	/* special case for empty array */
 	if (type->regions[0].size == 0) {
 		WARN_ON(type->cnt != 1 || type->total_size);
-		type->regions[0].base = base;
-		type->regions[0].size = size;
+		type->regions[0].base = base;//0x60008280
+		type->regions[0].size = size;//size 0x1125ed8
 		type->regions[0].flags = flags;
 		memblock_set_region_node(&type->regions[0], nid);	// 就是1
 		type->total_size = size;	 //0x1125ed8
@@ -90,18 +86,6 @@ int __init_memblock memblock_add_range(struct memblock_type *type,
 	if (!size)
 		return 0;
 
-	//第一次进来会先进这里,如果内存集合为空，则不需要执行插入或者合并动作
-	// 第一次放memroy 跟reserve 都是先进的这里
-	/* special case for empty array */
-	if (type->regions[0].size == 0) {
-		WARN_ON(type->cnt != 1 || type->total_size);
-		type->regions[0].base = base;
-		type->regions[0].size = size;
-		type->regions[0].flags = flags;
-		memblock_set_region_node(&type->regions[0], nid);   // 就是1
-		type->total_size = size;
-		return 0;
-	}
 repeat:
 	/*
 	 * The following is executed twice.  Once with %false @insert and
@@ -112,6 +96,7 @@ repeat:
 	base = obase;  //0x60004000
 	nr_new = 0;
 
+	// 查找新加的区域在已经存在的空间中的什么位置
 	for (i = 0; i < type->cnt; i++) {
 		struct memblock_region *rgn = &type->regions[i];
 		phys_addr_t rbase = rgn->base;     //0x60008280
@@ -140,7 +125,7 @@ repeat:
 	/* insert the remaining portion */ //  插入内存区 base - end
 	if (base < end) {  //60004000   60008000
 		nr_new++;
-		if (insert)
+		if (insert)//第二次进来的时候  i = 0
 			memblock_insert_region(type, i, base, end - base,
 					       nid, flags);   // nid = 1  flags  = 0 把60004000   60008000 这一段加入
 	}
@@ -156,6 +141,7 @@ repeat:
 	/*  第一次执行的的时候insert == false  */
 	if (!insert) {
 		while (type->cnt + nr_new > type->max)
+			//当增加的区域与原有的区域之和大于默认的最大的区域，就要把这个默认的区域变大才行
 			//memblock_double_array函数加倍给定的内存区域大小，然后把insert设为true再转到repeat标签.
 			if (memblock_double_array(type, obase, size) < 0)
 				return -ENOMEM;

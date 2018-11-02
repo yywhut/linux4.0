@@ -23,7 +23,7 @@ const struct of_device_id *of_match_device(const struct of_device_id *matches,
 {
 	if ((!matches) || (!dev->of_node))
 		return NULL;
-	return of_match_node(matches, dev->of_node);
+	return of_match_node(matches, dev->of_node);// 走的这里，这里一定是 platform中的dev的of_node节点
 }
 EXPORT_SYMBOL(of_match_device);
 

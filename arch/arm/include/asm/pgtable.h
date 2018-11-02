@@ -177,7 +177,7 @@ extern struct page *empty_zero_page;
 extern pgd_t swapper_pg_dir[PTRS_PER_PGD];
 
 /* to find an entry in a page-table-directory */
-#define pgd_index(addr)		((addr) >> PGDIR_SHIFT)
+#define pgd_index(addr)		((addr) >> PGDIR_SHIFT) // 右移动21位
 
 #define pgd_offset(mm, addr)	((mm)->pgd + pgd_index(addr))
 

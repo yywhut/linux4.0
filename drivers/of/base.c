@@ -452,7 +452,7 @@ static int __of_device_is_compatible(const struct device_node *device,
 
 	/* Compatible match has highest priority */
 	if (compat && compat[0]) {
-		prop = __of_find_property(device, "compatible", NULL);
+		prop = __of_find_property(device, "compatible", NULL);// 从device node中找出compatible属性
 		for (cp = of_prop_next_string(prop, NULL); cp;
 		     cp = of_prop_next_string(prop, cp), index++) {
 			if (of_compat_cmp(cp, compat, strlen(compat)) == 0) {
@@ -1546,6 +1546,9 @@ static int __of_parse_phandle_with_args(const struct device_node *np,
  * Returns the device_node pointer with refcount incremented.  Use
  * of_node_put() on it when done.
  */
+
+// 把一个由phandle的引用节点转化成device node
+ 
 struct device_node *of_parse_phandle(const struct device_node *np,
 				     const char *phandle_name, int index)
 {
@@ -1993,7 +1996,7 @@ const char *of_prop_next_string(struct property *prop, const char *cur)
 	if (!cur)
 		return prop->value;
 
-	curv += strlen(cur) + 1;
+	curv += strlen(cur) + 1;  // 加字符的长度，然后再加0？
 	if (curv >= prop->value + prop->length)
 		return NULL;
 

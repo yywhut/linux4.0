@@ -406,9 +406,11 @@ static int __device_attach(struct device_driver *drv, void *data)
 {
 	struct device *dev = data;
 
+	// 检查是否匹配 调用platform_bus_type.match
 	if (!driver_match_device(drv, dev))
 		return 0;
 
+// 调用driver中的probe
 	return driver_probe_device(drv, dev);
 }
 
@@ -444,6 +446,8 @@ int device_attach(struct device *dev)
 			ret = 0;
 		}
 	} else {
+	// 调用__device_attach
+	//// 对于plarform_bus_type下的每一个driver, 调用 __device_attach_driver
 		ret = bus_for_each_drv(dev->bus, NULL, dev, __device_attach);
 		pm_request_idle(dev);
 	}

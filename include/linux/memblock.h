@@ -24,28 +24,28 @@
 #define MEMBLOCK_HOTPLUG	0x1	/* hotpluggable region */
 
 struct memblock_region {
-	phys_addr_t base; //内存区域起始地址
-	phys_addr_t size;
-	unsigned long flags;
+	phys_addr_t base; //内存区域起始地址，是物理地址
+	phys_addr_t size;//内存区域大小，单位是字节
+	unsigned long flags;  //该内存区域的标识，例如MEMBLOCK_NOMAP，在做映射的时候不要映射到内核中
 #ifdef CONFIG_HAVE_MEMBLOCK_NODE_MAP
-	int nid;
+	int nid;      //CPU被划分为多个节点(node)，每个node 有对应的内存簇bank，一个标识
 #endif
 };
 
 struct memblock_type {
 	unsigned long cnt;	/* number of regions */ //当前集合(memory或者reserved)中记录的内存区域个数
 	unsigned long max;	/* size of the allocated array */ //当前集合(memory或者reserved)中可记录的内存区域的最大个数
-	phys_addr_t total_size;	/* size of all regions */
-	struct memblock_region *regions;
+	phys_addr_t total_size;	/* size of all regions */   //集合记录的内存总和
+	struct memblock_region *regions;   //执行内存区域结构（memblock_region）的指针
 };
 
 struct memblock {
-	bool bottom_up;  /* is bottom up direction? */
-	phys_addr_t current_limit;
-	struct memblock_type memory;
-	struct memblock_type reserved;
-#ifdef CONFIG_HAVE_MEMBLOCK_PHYS_MAP
-	struct memblock_type physmem;
+	bool bottom_up;  /* is bottom up direction? */  //表示分配器分配内存的方式 true:从低地址向高地址分配  false:相反就是从高地址向地址分配内存.
+	phys_addr_t current_limit;     //指出了内存块的大小限制
+	struct memblock_type memory;   //可分配内存的集合，申请内存时，会从这些集合中分配内存
+	struct memblock_type reserved;    //已分配内存的集合，分配出去的内存会放在这个集合里面管理
+#ifdef CONFIG_HAVE_MEMBLOCK_PHYS_MAP  
+	struct memblock_type physmem;  //物理内存的集合
 #endif
 };
 
@@ -182,6 +182,7 @@ void __next_mem_pfn_range(int *idx, int nid, unsigned long *out_start_pfn,
  * Walks over free (memory && !reserved) areas of memblock.  Available as
  * soon as memblock is initialized.
  */
+ //遍历memblock算法中的空闲内存空间
 #define for_each_free_mem_range(i, nid, p_start, p_end, p_nid)		\
 	for_each_mem_range(i, &memblock.memory, &memblock.reserved,	\
 			   nid, p_start, p_end, p_nid)
@@ -354,11 +355,11 @@ static inline unsigned long memblock_region_reserved_end_pfn(const struct memblo
 	     region++)
 
 
-#ifdef CONFIG_ARCH_DISCARD_MEMBLOCK
+#ifdef CONFIG_ARCH_DISCARD_MEMBLOCK   // 没有定义
 #define __init_memblock __meminit
-#define __initdata_memblock __meminitdata
+#define __initdata_memblock __meminitdata    // 如果这个编译配置选项开启，内存块的代码会被放置在 .init 段，这样它就会在内核引导完毕后被释放掉。
 #else
-#define __init_memblock
+#define __init_memblock       // 就为空了，
 #define __initdata_memblock
 #endif
 

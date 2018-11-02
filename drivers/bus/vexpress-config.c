@@ -172,10 +172,12 @@ static int vexpress_config_populate(struct device_node *node)
 	struct device_node *bridge;
 	struct device *parent;
 
+	//取出arm,vexpress,config-bridge这个以phandle为引用的 device
 	bridge = of_parse_phandle(node, "arm,vexpress,config-bridge", 0);
 	if (!bridge)
 		return -EINVAL;
 
+	// 这个bridge什么时候建立的呢
 	parent = class_find_device(vexpress_config_class, NULL, bridge,
 			vexpress_config_node_match);
 	if (WARN_ON(!parent))

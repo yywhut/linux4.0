@@ -455,6 +455,8 @@ static inline pud_t *pud_offset(pgd_t *pgd, unsigned long addr)
 #define pgd_offset(mm, addr)	((mm)->pgd+pgd_index(addr))
 
 /* to find an entry in a kernel page-table-directory */
+// 注意这是64位的文件，也就是计算这个虚拟地址所对应的 一级页表的地址
+
 #define pgd_offset_k(addr)	pgd_offset(&init_mm, addr)
 
 static inline pte_t pte_modify(pte_t pte, pgprot_t newprot)

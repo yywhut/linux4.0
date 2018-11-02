@@ -87,6 +87,7 @@ void __init free_bootmem_late(unsigned long addr, unsigned long size)
 // 第一个玄机，这里start end 是页帧号，而不是地址
 static void __init __free_pages_memory(unsigned long start, unsigned long end)
 {
+	// 第一次进来 start = 0x60000   end=0x60004  一共4个page 16k的数据
 	int order;
 
 	while (start < end) {
@@ -94,10 +95,12 @@ static void __init __free_pages_memory(unsigned long start, unsigned long end)
 			//__ffs这个函数计算页帧号start中，第一个为1的bit位是第几个bit位
 			// 例如0x61053第一个为1的bit是第0位，所以__ffs为0
 
+		//第一次运行到这里order = 10
 		while (start + (1UL << order) > end)
 			order--;
 		// 第一次过来order  = 2  也就是4个page，，，start = Hex:0x60000
-		__free_pages_bootmem(pfn_to_page(start), order); //把具有这些order值得页面添加到伙伴系统中
+		// 其实上面就是计算从start 到end 之间，最大可以用order 为几来表示，
+		__free_pages_bootmem(pfn_to_page(start), order); //把具有这些order值得页面添加到伙伴系统中,要跟0x400对齐，才能产生order为10
 
 		start += (1UL << order);
 	}
@@ -131,6 +134,9 @@ static unsigned long __init free_low_memory_core_early(void)
 
 	// 通过mem range 找到所有的rang，然后把这些mem添加到内存管理的核心里面
 	for_each_free_mem_range(i, NUMA_NO_NODE, &start, &end, NULL)
+		// 第一次进来 start = 0x60000000，end = 0x60004000
+		// 第二次进来 start：0x60008000 end:0x60008280    这一段就丢弃了
+		// 第三次进来 start:0x6116e298      end:0x68000000
 		count += __free_memory_core(start, end);
 
 #ifdef CONFIG_ARCH_DISCARD_MEMBLOCK

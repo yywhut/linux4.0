@@ -822,18 +822,22 @@ static int platform_match(struct device *dev, struct device_driver *drv)
 		return !strcmp(pdev->driver_override, drv->name);
 
 	/* Attempt an OF style match first */
+	// 比较 platform_dev.driver_override 和 platform_driver.drv->name
 	if (of_driver_match_device(dev, drv))
 		return 1;
 
 	/* Then try ACPI style match */
+	 //比较 platform_dev.dev.of_node的compatible属性 和 platform_driver.drv->of_match_table
 	if (acpi_driver_match_device(dev, drv))
 		return 1;
 
 	/* Then try to match against the id table */
+	//比较 platform_dev.name 和 platform_driver.id_table
 	if (pdrv->id_table)
 		return platform_match_id(pdrv->id_table, pdev) != NULL;
 
 	/* fall-back to driver name match */
+	//比较 platform_dev.name 和 platform_driver.drv->name
 	return (strcmp(pdev->name, drv->name) == 0);
 }
 

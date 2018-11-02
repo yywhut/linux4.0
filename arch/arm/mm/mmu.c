@@ -1130,11 +1130,11 @@ void __init sanity_check_meminfo(void)
 	int highmem = 0;
 
 	//计算 vmalloc的起始地址，这个地址也就是 normal memory跟high memory的一个分界线
-	phys_addr_t vmalloc_limit = __pa(vmalloc_min - 1) + 1;
+	phys_addr_t vmalloc_limit = __pa(vmalloc_min - 1) + 1;  //0x8f800000
 	struct memblock_region *reg;
 
 	//  判断下每个内存模块，是否需要拆分成high 跟normal， 此时memroy就一个block
-	for_each_memblock(memory, reg) {
+	for_each_memblock(memory, reg) {    // 这里只执行了一次，因为只有一个从0x60000000开始的内存区域
 		phys_addr_t block_start = reg->base;
 		phys_addr_t block_end = reg->base + reg->size;
 		phys_addr_t size_limit = reg->size;
@@ -1146,9 +1146,10 @@ void __init sanity_check_meminfo(void)
 		if (reg->base >= vmalloc_limit)
 			highmem = 1;
 		else
-			size_limit = vmalloc_limit - reg->base;
+			size_limit = vmalloc_limit - reg->base;     //0x2f800000 走的这里
 
 
+	// 没有执行
 		if (!IS_ENABLED(CONFIG_HIGHMEM) || cache_is_vipt_aliasing()) {
 
 			if (highmem) {
@@ -1169,9 +1170,10 @@ void __init sanity_check_meminfo(void)
 		}
 
 		if (!highmem) {
+			//block_end:0xa0000000   arm_lowmem_limit:0
 			if (block_end > arm_lowmem_limit) {
 				if (reg->size > size_limit)
-					arm_lowmem_limit = vmalloc_limit;   // 代表normal memory的最高值
+					arm_lowmem_limit = vmalloc_limit;   // 代表normal memory的最高值         0x8f800000
 				else
 					arm_lowmem_limit = block_end;
 			}
@@ -1189,6 +1191,7 @@ void __init sanity_check_meminfo(void)
 			 * allocated when mapping the start of bank 0, which
 			 * occurs before any free memory is mapped.
 			 */
+			// 都没有执行
 			if (!memblock_limit) {
 				if (!IS_ALIGNED(block_start, SECTION_SIZE))
 					memblock_limit = block_start;
@@ -1199,21 +1202,22 @@ void __init sanity_check_meminfo(void)
 		}
 	}
 
-	high_memory = __va(arm_lowmem_limit - 1) + 1;
+	high_memory = __va(arm_lowmem_limit - 1) + 1;  //0xef800000  转成虚拟地址
 
 	/*
 	 * Round the memblock limit down to a section size.  This
 	 * helps to ensure that we will allocate memory from the
 	 * last full section, which should be mapped.
 	 */
-	if (memblock_limit)
+	if (memblock_limit)  // 没有执行
 		memblock_limit = round_down(memblock_limit, SECTION_SIZE);
 	if (!memblock_limit)
-		memblock_limit = arm_lowmem_limit;
+		memblock_limit = arm_lowmem_limit;   //0x8f800000 走的这里
 	
 	eprintk("arm_lowmem_limit:0x%x, vmalloc_min=0x%x, vmalloc_limit =0x%x\n",
 			arm_lowmem_limit,vmalloc_min,vmalloc_limit);
-//arm_lowmem_limit = 0x8f800000 是物理地址，减去0x60000000  = 760M,  vmalloc_min = 0xef800000 就是转化后的虚拟地址
+//arm_lowmem_limit = 0x8f800000 是物理地址，减去0x60000000  = 760M,  
+//vmalloc_min = 0xef800000 就是转化后的虚拟地址
 //vmalloc_limit = 0x8f800000   760M
 	memblock_set_current_limit(memblock_limit);
 }
@@ -1229,8 +1233,16 @@ static inline void prepare_page_table(void)
 	/*
 	 * Clear out all the mappings below the kernel image.
 	 */
-	for (addr = 0; addr < MODULES_VADDR; addr += PMD_SIZE)
+	 //pmd_off_k(addr) 因为二级页表没有pmd 跟pud，只有pgd，所以这里其实
+	 //就是计算addr所对应的在一节页表中的位置
+	 // 这里addr每次移动2M的位置
+
+	// 这里其实是把虚拟地址从0开始到MODULES_VADDR 之间的虚拟地址所对应的页表清空
+	for (addr = 0; addr < MODULES_VADDR; addr += PMD_SIZE){
+		test = pmd_off_k(addr);  // 我加的代码，第一次读出来是0xc0004000
+		// 第二次是 0xc0004008
 		pmd_clear(pmd_off_k(addr));
+		}
 
 #ifdef CONFIG_XIP_KERNEL
 	/* The XIP kernel is mapped in the module area -- skip over it */
@@ -1242,14 +1254,17 @@ static inline void prepare_page_table(void)
 	/*
 	 * Find the end of the first block of lowmem.
 	 */
+	 //end 0xa0000000
 	end = memblock.memory.regions[0].base + memblock.memory.regions[0].size;
 	if (end >= arm_lowmem_limit)
-		end = arm_lowmem_limit;
+		end = arm_lowmem_limit;    //end = 0x8f800000
 
 	/*
 	 * Clear out all the kernel space mappings, except for the first
 	 * memory bank, up to the vmalloc region.
 	 */
+
+	// 从 0xef800000开始
 	for (addr = __phys_to_virt(end);
 	     addr < VMALLOC_START; addr += PMD_SIZE)
 		pmd_clear(pmd_off_k(addr));
@@ -1273,7 +1288,7 @@ void __init arm_mm_memblock_reserve(void)
 	 * and can only be in node 0.
 	 */
 
-	// 保留页表 [0x00000060004000-0x00000060007fff]
+	// 保留页表 [0x00000060004000-0x00000060007fff]，大小为0x4000
 	memblock_reserve(__pa(swapper_pg_dir), SWAPPER_PG_DIR_SIZE);
 
 #ifdef CONFIG_SA1111
@@ -1301,6 +1316,7 @@ static void __init devicemaps_init(const struct machine_desc *mdesc)
 	/*
 	 * Allocate the vector page early.
 	 */
+	 // 第一次需要分配pte的内存
 	vectors = early_alloc(PAGE_SIZE * 2);
 
 	early_trap_init(vectors);
@@ -1402,6 +1418,7 @@ static void __init kmap_init(void)
 
 
 // 也就是映射了内核，跟内核到 760M的地方 也就是vmalloc的开始地方
+// 这里面都是段映射，没有开pte
 static void __init map_lowmem(void)
 {
 	struct memblock_region *reg;
@@ -1611,7 +1628,7 @@ void __init paging_init(const struct machine_desc *mdesc)
 	/* allocate the zero page. */
 	zero_page = early_alloc(PAGE_SIZE);
 
-	bootmem_init();// zone初始化在这里
+	bootmem_init();// zone初始化在这里，就是初始化 低端 高端内存，初始化zone结构体成员，初始化page数组结构
 
 	empty_zero_page = virt_to_page(zero_page);
 	__flush_dcache_page(NULL, empty_zero_page);

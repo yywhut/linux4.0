@@ -115,12 +115,14 @@ struct platform_device *of_device_alloc(struct device_node *np,
 		return NULL;
 
 	/* count the io and irq resources */
+	// 首先计算io资源，中断资源，内存资源，计算他们有几个资源
 	while (of_address_to_resource(np, num_reg, &temp_res) == 0)
 		num_reg++;
 	num_irq = of_irq_count(np);
 
 	/* Populate the resource table */
 	if (num_irq || num_reg) {
+		// 分配resource 数组
 		res = kzalloc(sizeof(*res) * (num_irq + num_reg), GFP_KERNEL);
 		if (!res) {
 			platform_device_put(dev);
@@ -130,9 +132,10 @@ struct platform_device *of_device_alloc(struct device_node *np,
 		dev->num_resources = num_reg + num_irq;
 		dev->resource = res;
 		for (i = 0; i < num_reg; i++, res++) {
-			rc = of_address_to_resource(np, i, res);
+			rc = of_address_to_resource(np, i, res);// 把那些地址资源转化成resources结构体
 			WARN_ON(rc);
 		}
+		// 把中断转换成资源
 		if (of_irq_to_resource_table(np, res, num_irq) != num_irq)
 			pr_debug("not all legacy IRQ resources mapped for %s\n",
 				 np->name);
@@ -390,6 +393,7 @@ static int of_platform_bus_create(struct device_node *bus,
 	int rc = 0;
 
 	/* Make sure it has a compatible property */
+	// 如果根节点下面的那些子节点不含有compatible属性，就马上返回0
 	if (strict && (!of_get_property(bus, "compatible", NULL))) {
 		pr_debug("%s() - skipping %s, no compatible prop\n",
 			 __func__, bus->full_name);
@@ -411,7 +415,12 @@ static int of_platform_bus_create(struct device_node *bus,
 		return 0;
 	}
 
+	// 对根目录下的这些子节点，创建出对应的platform device
 	dev = of_platform_device_create_pdata(bus, bus_id, platform_data, parent);
+
+	// 如果此节点不含有of_default_bus_match_table里面的属性，则马上返回，否则
+	//对于它的子节点，当作一个总线来对待，继续建立platformdevice
+	
 	if (!dev || !of_match_node(matches, bus))
 		return 0;
 
@@ -493,6 +502,7 @@ int of_platform_populate(struct device_node *root,
 	struct device_node *child;
 	int rc = 0;
 
+	// 得到根节点
 	root = root ? of_node_get(root) : of_find_node_by_path("/");
 	if (!root)
 		return -EINVAL;

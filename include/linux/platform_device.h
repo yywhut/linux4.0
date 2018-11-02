@@ -23,9 +23,11 @@ struct platform_device {
 	const char	*name;
 	int		id;
 	bool		id_auto;
-	struct device	dev;
-	u32		num_resources;
-	struct resource	*resource;
+	struct device	dev;  // 在这里保存那些一般认为定义的属性
+	
+	u32		num_resources;  // 表示有几个资源
+	struct resource	*resource; // 就是dtb里面的资源，可能是reg属性，可能是中断属性等
+	// 也就是说可能有内存，中断，io资源  ，这里保存了这些重要的资源，其他不重要的资源则保存在dev结构中的of_node节点下
 
 	const struct platform_device_id	*id_entry;
 	char *driver_override; /* Driver name to force a match */

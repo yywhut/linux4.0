@@ -16,8 +16,8 @@
  * nesting etc..
  */
 struct resource {
-	resource_size_t start;
-	resource_size_t end;
+	resource_size_t start;  // 就对应于dtb中的起始地址
+	resource_size_t end;	// 就是dtb中起始地址+size - 1
 	const char *name;
 	unsigned long flags;
 	struct resource *parent, *sibling, *child;

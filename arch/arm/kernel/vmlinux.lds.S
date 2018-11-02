@@ -46,7 +46,7 @@
 #endif
 
 OUTPUT_ARCH(arm)
-ENTRY(stext)
+ENTRY(stext)    起始
 
 #ifndef __ARMEB__
 jiffies = jiffies_64;
@@ -87,7 +87,11 @@ SECTIONS
 #ifdef CONFIG_XIP_KERNEL
 	. = XIP_VIRT_ADDR(CONFIG_XIP_PHYS_ADDR);
 #else
-	. = PAGE_OFFSET + TEXT_OFFSET;
+	. = PAGE_OFFSET + TEXT_OFFSET;       //说明整个kernel的起始地址就是从这里开始的
+										//TEXT_OFFSET定义在Makefile里面
+										// arch/arm/Makefile里面
+											//TEXT_OFFSET := $(textofs-y)
+											//textofs-y	:= 0x00008000
 #endif
 	.head.text : {
 		_text = .;

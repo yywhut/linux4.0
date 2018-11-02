@@ -524,6 +524,7 @@ int bus_add_device(struct device *dev)
 				&dev->bus->p->subsys.kobj, "subsystem");
 		if (error)
 			goto out_subsys;
+		//// 把 platform_device 放入 platform_bus_type的device链表中
 		klist_add_tail(&dev->p->knode_bus, &bus->p->klist_devices);
 	}
 	return 0;

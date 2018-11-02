@@ -443,12 +443,12 @@ ENDPROC(__dabt_usr)
 
 	.align	5
 __irq_usr:
-	usr_entry
+	usr_entry     // 保存现场
 	kuser_cmpxchg_check
 	irq_handler
 	get_thread_info tsk
 	mov	why, #0
-	b	ret_to_user_from_irq
+	b	ret_to_user_from_irq   恢复现场
  UNWIND(.fnend		)
 ENDPROC(__irq_usr)
 

@@ -317,6 +317,8 @@ void __init arm_memblock_init(const struct machine_desc *mdesc)
 		phys_initrd_size = initrd_end - initrd_start;
 	}
 	initrd_start = initrd_end = 0;
+
+	// 这里都没进
 	if (phys_initrd_size &&
 	    !memblock_is_region_memory(phys_initrd_start, phys_initrd_size)) {
 		pr_err("INITRD: 0x%08llx+0x%08lx is not a memory region - disabling initrd\n",

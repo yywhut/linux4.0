@@ -61,6 +61,10 @@
  */
 #define __round_mask(x, y) ((__typeof__(x))((y)-1))
 #define round_up(x, y) ((((x)-1) | __round_mask(x, y))+1)
+
+
+
+// 按照y向下取整 比如  round_down(0x8F7FF001, 0x1000)  =     0x8F7FF001
 #define round_down(x, y) ((x) & ~__round_mask(x, y))
 
 #define FIELD_SIZEOF(t, f) (sizeof(((t*)0)->f))
@@ -739,6 +743,7 @@ static inline void ftrace_dump(enum ftrace_dump_mode oops_dump_mode) { }
  * This macro does strict typechecking of lo/hi to make sure they are of the
  * same type as val.  See the unnecessary pointer comparisons.
  */
+ //而clamp_t 用于判断db是否在3和15之内，如果比3小则返回3，比15大的返回15.在其间的话，返回自己本身
 #define clamp(val, lo, hi) min((typeof(val))max(val, lo), hi)
 
 /*

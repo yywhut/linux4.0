@@ -778,7 +778,7 @@ struct device {
 	/* arch specific additions */
 	struct dev_archdata	archdata;
 
-	struct device_node	*of_node; /* associated device tree node */
+	struct device_node	*of_node; /* associated device tree node */  //device tree 相关
 	struct acpi_dev_node	acpi_node; /* associated ACPI device node */
 
 	dev_t			devt;	/* dev_t, creates the sysfs "dev" */

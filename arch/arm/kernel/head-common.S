@@ -137,7 +137,7 @@ ENDPROC(__mmap_switched)
 	.align	2
 	.type	__mmap_switched_data, %object
 
-	@留意这里放的都是地址
+	@留意这里放的都是地址,韦东山也说了这里存放的是变量的地址
 __mmap_switched_data:
 	.long	__data_loc			@ r4     // 数据段的起始地址
 	.long	_sdata				@ r5			

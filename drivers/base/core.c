@@ -1027,6 +1027,8 @@ int device_add(struct device *dev)
 	error = device_add_attrs(dev);
 	if (error)
 		goto AttrsError;
+
+	// 放入bus
 	error = bus_add_device(dev);
 	if (error)
 		goto BusError;
@@ -1055,6 +1057,8 @@ int device_add(struct device *dev)
 					     BUS_NOTIFY_ADD_DEVICE, dev);
 
 	kobject_uevent(&dev->kobj, KOBJ_ADD);
+	
+	// 在这里probe driver
 	bus_probe_device(dev);
 	if (parent)
 		klist_add_tail(&dev->p->knode_parent,

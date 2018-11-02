@@ -85,7 +85,7 @@
 #define PMD_SHIFT		21
 #define PGDIR_SHIFT		21
 
-#define PMD_SIZE		(1UL << PMD_SHIFT)  //0x100000
+#define PMD_SIZE		(1UL << PMD_SHIFT)  //0x200000
 #define PMD_MASK		(~(PMD_SIZE-1))
 #define PGDIR_SIZE		(1UL << PGDIR_SHIFT)
 #define PGDIR_MASK		(~(PGDIR_SIZE-1))  //0xfff00000 

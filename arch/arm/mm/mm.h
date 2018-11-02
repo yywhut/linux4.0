@@ -33,6 +33,8 @@ static inline pte_t get_top_pte(unsigned long va)
 	return *ptep;
 }
 
+
+//pgd_offset_k(virt) 也就是计算addr这个虚拟地址所对应的 在一级页表中的位置
 static inline pmd_t *pmd_off_k(unsigned long virt)
 {
 	return pmd_offset(pud_offset(pgd_offset_k(virt), virt), virt);

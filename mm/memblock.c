@@ -168,24 +168,29 @@ __memblock_find_range_top_down(phys_addr_t start, phys_addr_t end,
 	u64 i;
 
 /*
-	函数通过使用for_each_free_mem_range_reverse宏封装调用
-	__next_free_mem_range_rev()函数，此函数逐一将memblock.memory
-	里面的内存块信息提取出来与memblock.reserved的各项信息进行检验，
-	确保返回的this_start和this_end不会是分配过的内存块。
+	函数通过使用for_each_free_mem_range_reverse宏封装调用__next_free_mem_range_rev()函数，
+	此函数逐一将memblock.memory里面的内存块信息提取出来与memblock.reserved的各项信息进行检验，
+	确保返回的this_start和this_end不会是分配过的内存块。然后通过clamp取中间值，判断大小是否满足，
+	满足的情况下，将自末端向前（因为这是top-down申请方式）的size大小的空间的起始地址
+	（前提该地址不会超出this_start）返回回去。至此满足要求的内存块算是找到了。
 */
-//i:0x100000000000000
+//i:
 	for_each_free_mem_range_reverse(i, nid, &this_start, &this_end, NULL) {
-
-	//this_start：0x6800bbe0   stat：0x1000   end：0x8f800000
+	// 找区间
+	 //this_start = 0x6800bbe0 stat：0x1000 end：0x8f800000 this_end = 0xa0000000  
+	  
 		this_start = clamp(this_start, start, end);
-	//this_start：0x6800bbe0  this_end：0xa0000000  start：0x1000  end：0x8f800000
+	//this_start：0x6800bbe0 
 		this_end = clamp(this_end, start, end);
-// this_end :0x8f800000  size:0x2000
+	
+// this_end :0x8f800000  size:0x1000
 		if (this_end < size)
 			continue;
 
-//cand:0x8f7fe000
+//0x8f800000 - 0x2000    align：0x1000
 		cand = round_down(this_end - size, align);
+
+	// card   = 0x8f7fe000  也就是取出了8k的容量
 		if (cand >= this_start)
 			return cand;
 	}
@@ -226,7 +231,7 @@ phys_addr_t __init_memblock memblock_find_in_range_node(phys_addr_t size,
 
 	/* avoid allocating the first page */
 	start = max_t(phys_addr_t, start, PAGE_SIZE); //0x1000 也就是4096
-	end = max(start, end);
+	end = max(start, end);  //0x8f800000 也就是低端内存
 	kernel_end = __pa_symbol(_end); //0x6104c158 应该是kernel的结束地址
 
 	/*
@@ -234,7 +239,8 @@ phys_addr_t __init_memblock memblock_find_in_range_node(phys_addr_t size,
 	 * is set and @end is above the kernel image.
 	 */
 	 //memblock_bottom_up 返回false    前面初始化的时候也知道这个值是false（这不是一定的，在numa初始化时会设置为true）
-	if (memblock_bottom_up() && end > kernel_end) {
+	 // 第一次进来的时候这里是false，所以这个if没有进来
+	if (memblock_bottom_up() && end > kernel_end) {  //  分配8M的page 结构的时候，这里也没有进
 		phys_addr_t bottom_up_start;
 
 		/* make sure we will allocate above the kernel */
@@ -260,7 +266,7 @@ phys_addr_t __init_memblock memblock_find_in_range_node(phys_addr_t size,
 			     "memory hotunplug may be affected\n");
 	}
 
-//0x1000  0x8f800000 0x800000 0x2000  0x40   0
+//0x1000  0x8f800000 0x2000 0x2000  -1
 	return __memblock_find_range_top_down(start, end, size, align, nid);
 }
 
@@ -453,6 +459,7 @@ static int __init_memblock memblock_double_array(struct memblock_type *type,
  *
  * Scan @type and merge neighboring compatible regions.
  */
+ // 合并相邻的，这没啥好看的
 static void __init_memblock memblock_merge_regions(struct memblock_type *type)
 {
 	int i = 0;
@@ -495,16 +502,16 @@ static void __init_memblock memblock_insert_region(struct memblock_type *type,
 						   phys_addr_t size,
 						   int nid, unsigned long flags)
 {
-	struct memblock_region *rgn = &type->regions[idx];
+	struct memblock_region *rgn = &type->regions[idx];// 第一次进来取出的是kernel那一段
 
 	BUG_ON(type->cnt >= type->max);
-	memmove(rgn + 1, rgn, (type->cnt - idx) * sizeof(*rgn));
+	memmove(rgn + 1, rgn, (type->cnt - idx) * sizeof(*rgn));//把kernel那一段往后移动
 	rgn->base = base;
 	rgn->size = size;
 	rgn->flags = flags;
 	memblock_set_region_node(rgn, nid);
-	type->cnt++;
-	type->total_size += size;
+	type->cnt++;      //   第一次进来这个值就变成2了
+	type->total_size += size;   // kernel的数据 加上 页表的16k数据
 }
 
 /**
@@ -1091,6 +1098,7 @@ static phys_addr_t __init memblock_alloc_range_nid(phys_addr_t size,
 	if (!align)
 		align = SMP_CACHE_BYTES;
 
+	// 第一次进来        size：0x2000  align：0x2000  start：0 end：0
 	found = memblock_find_in_range_node(size, align, start, end, nid);
 	if (found && !memblock_reserve(found, size)) {
 		/*

@@ -215,6 +215,7 @@ const struct machine_desc * __init setup_machine_fdt(unsigned int dt_phys)
 	if (!dt_phys || !early_init_dt_verify(phys_to_virt(dt_phys)))
 		return NULL;
 
+	// 找到最匹配的machie descrtip
 	mdesc = of_flat_dt_match_machine(mdesc_best, arch_get_next_mach);  // 找哪些板子叫什么名字
 
 	if (!mdesc) {

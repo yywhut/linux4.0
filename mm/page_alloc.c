@@ -851,14 +851,15 @@ void __init __free_pages_bootmem(struct page *page, unsigned int order)
 	prefetchw(p);
 	for (loop = 0; loop < (nr_pages - 1); loop++, p++) {
 		prefetchw(p + 1);
-		__ClearPageReserved(p);
+		__ClearPageReserved(p);   // 在这里把reserved标志去掉了
 		set_page_count(p, 0);
 	}
 	__ClearPageReserved(p);
 	set_page_count(p, 0);
 
+	// 第一次来的时候是0
 	page_zone(page)->managed_pages += nr_pages;
-	set_page_refcounted(page);
+	set_page_refcounted(page);  //page->_count 写1
 	__free_pages(page, order);
 }
 
@@ -4232,6 +4233,8 @@ void __meminit memmap_init_zone(unsigned long size, int nid, unsigned long zone,
 		highest_memmap_pfn = end_pfn - 1;  //highest_memmap_pfn :0x8f7ff
 
 	z = &NODE_DATA(nid)->node_zones[zone];
+
+	// 这里其实就是对每个page结构进行初始化
 	for (pfn = start_pfn; pfn < end_pfn; pfn++) {
 		/*
 		 * There can be holes in boot-time mem_map[]s
@@ -5012,7 +5015,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		//第一次先处理low mem0x2f800       第二次 Hex:0x10800
 		size = zone_spanned_pages_in_node(nid, j, node_start_pfn,
 						  node_end_pfn, zones_size);
-		//第一次0x2f800      第二次 Hex:0x10800
+		//第一次realsize = freesize = 0x2f800      第二次 Hex:0x10800
 		realsize = freesize = size - zone_absent_pages_in_node(nid, j,
 								node_start_pfn,
 								node_end_pfn,
@@ -5031,7 +5034,8 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		//freesize = 0x2f800  第一次进来了，第二次没有进来
 		if (!is_highmem_idx(j)) {
 			if (freesize >= memmap_pages) {
-				freesize -= memmap_pages;  //这里进来了，把这个值减掉了
+				freesize -= memmap_pages;  //这里进来了，把这个值减掉了，一共有0x2f800个page，减去memmap_pages 
+											//也就是减去用来记录page的page结构的大小
 				if (memmap_pages)  // Normal zone: 1520 pages used for memmap
 					printk(KERN_DEBUG
 					       "  %s zone: %lu pages used for memmap\n",
@@ -5050,7 +5054,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		}
 
 		if (!is_highmem_idx(j))
-			nr_kernel_pages += freesize;   // 第一次走这里 Hex:0x2f210
+			nr_kernel_pages += freesize;   // 第一次走这里 nr_kernel_pages = Hex:0x2f210
 		/* Charge for highmem memmap if there are enough kernel pages */
 		else if (nr_kernel_pages > memmap_pages * 2)
 			nr_kernel_pages -= memmap_pages;  //第二次走的这里 Hex:0x2f000
@@ -5068,7 +5072,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		zone->managed_pages = is_highmem_idx(j) ? realsize : freesize;  //第一次Hex:0x2f210
 
 		
-#ifdef CONFIG_NUMA
+#ifdef CONFIG_NUMA  // 没进
 		zone->node = nid;
 		zone->min_unmapped_pages = (freesize*sysctl_min_unmapped_ratio)
 						/ 100;
@@ -5082,9 +5086,10 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		zone_pcp_init(zone);
 
 		/* For bootup, initialized properly in watermark setup */
+		// 这里在干嘛？
 		mod_zone_page_state(zone, NR_ALLOC_BATCH, zone->managed_pages);
 
-		lruvec_init(&zone->lruvec);
+		lruvec_init(&zone->lruvec);  //  初始化lru链表
 		if (!size)
 			continue;
 
@@ -5107,7 +5112,7 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 	if (!pgdat->node_spanned_pages)
 		return;
 
-#ifdef CONFIG_FLAT_NODE_MEM_MAP
+#ifdef CONFIG_FLAT_NODE_MEM_MAP  // 这里跑了
 	/* ia64 gets its own node_mem_map, before this, without bootmem */
 	if (!pgdat->node_mem_map) {//指向page实例数组的指针，用于描述结点的所有物理内存页，它包含了结点中所有内存域的页
 		unsigned long size, start, end;
@@ -5134,6 +5139,7 @@ static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
 	/*
 	 * With no DISCONTIG, the global mem_map is just set as node 0's
 	 */
+	 // 看看这里跑的哪里
 	if (pgdat == NODE_DATA(0)) {
 		mem_map = NODE_DATA(0)->node_mem_map;
 #ifdef CONFIG_HAVE_MEMBLOCK_NODE_MAP
@@ -5169,7 +5175,7 @@ void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 				  zones_size, zholes_size);
 
 	alloc_node_mem_map(pgdat);  //pgdat->node_mem_map 
-	//这个函数是用来分配8M的内存空间，这8M的内存空间是page 结构体的指针，用来记录真个1G的
+	//这个函数是用来分配8M的内存空间，这8M的内存空间是page 结构体的指针，用来记录整个1G的
 	// 物理内存page
 	// 最后pgdat->node_mem_map 分配的地址就是  0xeeffa000
 	
@@ -5179,8 +5185,7 @@ void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 		(unsigned long)pgdat->node_mem_map);
 #endif
 
-	free_area_init_core(pgdat, start_pfn, end_pfn,
-			    zones_size, zholes_size);
+	free_area_init_core(pgdat, start_pfn, end_pfn,zones_size, zholes_size);
 }
 
 #ifdef CONFIG_HAVE_MEMBLOCK_NODE_MAP
